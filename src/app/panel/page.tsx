@@ -2,103 +2,122 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 type Membership = {
+  organization_id: string;
   role: "owner" | "admin" | "operator" | "viewer";
-  organizations:
-    | {
-        id: string;
-        name: string;
-        slug: string;
-      }
-    | {
-        id: string;
-        name: string;
-        slug: string;
-      }[]
-    | null;
 };
 
-function normalizeOrganization(
-  membership: Membership,
-) {
-  if (!membership.organizations) {
-    return null;
-  }
-
-  if (Array.isArray(membership.organizations)) {
-    return membership.organizations[0] ?? null;
-  }
-
-  return membership.organizations;
-}
-
-export const dynamic = "force-dynamic";
+type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+};
 
 export default async function PanelPage() {
   const supabase = await createClient();
 
-  const { data } = await supabase.auth.getClaims();
+  const { data: claimsData, error: claimsError } =
+    await supabase.auth.getClaims();
 
-const userId =
-  typeof data?.claims.sub === "string"
-    ? data.claims.sub
-    : null;
+  if (claimsError) {
+    console.error("Error verificando usuario:", claimsError);
+    redirect("/login");
+  }
+
+  const userId =
+    typeof claimsData?.claims.sub === "string"
+      ? claimsData.claims.sub
+      : null;
 
   if (!userId) {
     redirect("/login");
   }
 
-  const { data: membershipData, error: membershipError } =
-    await supabase
-      .from("organization_users")
-      .select(`
-        role,
-        organizations (
-          id,
-          name,
-          slug
-        )
-      `)
-      .eq("user_id", userId)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle();
+  /*
+   * Primero obtenemos la pertenencia del usuario.
+   * Evitamos por ahora una consulta relacional anidada para
+   * poder identificar con claridad cualquier problema de RLS.
+   */
+  const {
+    data: membershipData,
+    error: membershipError,
+  } = await supabase
+    .from("organization_users")
+    .select("organization_id, role")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
 
   if (membershipError) {
     console.error(
-      "Error al cargar la organización:",
+      "Error consultando organization_users:",
       membershipError,
+    );
+
+    return (
+      <PanelError
+        title="No pudimos consultar tu acceso"
+        message={membershipError.message}
+      />
     );
   }
 
   const membership = membershipData as Membership | null;
-  const organization = membership
-    ? normalizeOrganization(membership)
-    : null;
 
-  if (!membership || !organization) {
+  if (!membership) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8">
-        <h1 className="text-2xl font-bold text-amber-900">
-          Usuario sin organización
-        </h1>
+      <PanelError
+        title="Usuario sin organización"
+        message="El inicio de sesión funciona, pero este usuario todavía no está vinculado con ninguna organización de ClubSmart."
+      />
+    );
+  }
 
-        <p className="mt-3 leading-7 text-amber-800">
-          El usuario inició sesión correctamente, pero todavía no
-          está vinculado con una organización de ClubSmart.
-        </p>
-      </div>
+  const {
+    data: organizationData,
+    error: organizationError,
+  } = await supabase
+    .from("organizations")
+    .select("id, name, slug")
+    .eq("id", membership.organization_id)
+    .maybeSingle();
+
+  if (organizationError) {
+    console.error(
+      "Error consultando organizations:",
+      organizationError,
+    );
+
+    return (
+      <PanelError
+        title="No pudimos cargar la organización"
+        message={organizationError.message}
+      />
+    );
+  }
+
+  const organization = organizationData as Organization | null;
+
+  if (!organization) {
+    return (
+      <PanelError
+        title="Organización no encontrada"
+        message="La vinculación administrativa existe, pero la organización correspondiente no pudo ser leída."
+      />
     );
   }
 
   const [
-    { count: activitiesCount },
-    { count: instructorsCount },
-    { count: contactRequestsCount },
+    activitiesResult,
+    instructorsResult,
+    contactRequestsResult,
   ] = await Promise.all([
     supabase
       .from("activities")
-      .select("*", {
+      .select("id", {
         count: "exact",
         head: true,
       })
@@ -107,7 +126,7 @@ const userId =
 
     supabase
       .from("instructors")
-      .select("*", {
+      .select("id", {
         count: "exact",
         head: true,
       })
@@ -116,7 +135,7 @@ const userId =
 
     supabase
       .from("contact_requests")
-      .select("*", {
+      .select("id", {
         count: "exact",
         head: true,
       })
@@ -124,24 +143,45 @@ const userId =
       .eq("status", "new"),
   ]);
 
+  if (activitiesResult.error) {
+    console.error(
+      "Error contando actividades:",
+      activitiesResult.error,
+    );
+  }
+
+  if (instructorsResult.error) {
+    console.error(
+      "Error contando responsables:",
+      instructorsResult.error,
+    );
+  }
+
+  if (contactRequestsResult.error) {
+    console.error(
+      "Error contando consultas:",
+      contactRequestsResult.error,
+    );
+  }
+
   const metrics = [
     {
       label: "Actividades activas",
-      value: activitiesCount ?? 0,
+      value: activitiesResult.count ?? 0,
     },
     {
       label: "Profesores y responsables",
-      value: instructorsCount ?? 0,
+      value: instructorsResult.count ?? 0,
     },
     {
       label: "Consultas nuevas",
-      value: contactRequestsCount ?? 0,
+      value: contactRequestsResult.count ?? 0,
     },
   ];
 
   return (
-    <div>
-      <div>
+    <div className="space-y-8">
+      <section>
         <p className="text-sm font-semibold uppercase tracking-wider text-blue-700">
           Panel administrativo
         </p>
@@ -151,12 +191,14 @@ const userId =
         </h1>
 
         <p className="mt-3 text-slate-600">
-          Rol actual:{" "}
-          <span className="font-medium">{membership.role}</span>
+          Rol administrativo:{" "}
+          <span className="font-semibold text-slate-900">
+            {translateRole(membership.role)}
+          </span>
         </p>
-      </div>
+      </section>
 
-      <div className="mt-8 grid gap-5 md:grid-cols-3">
+      <section className="grid gap-5 md:grid-cols-3">
         {metrics.map((metric) => (
           <article
             key={metric.label}
@@ -171,19 +213,57 @@ const userId =
             </p>
           </article>
         ))}
-      </div>
+      </section>
 
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">
-          Primer panel de ClubSmart
+          Acceso administrativo funcionando
         </h2>
 
         <p className="mt-3 max-w-3xl leading-7 text-slate-600">
-          El acceso administrativo ya está funcionando. El próximo
-          módulo permitirá crear, editar, publicar y desactivar
-          actividades desde este panel.
+          El usuario está autenticado y vinculado correctamente con
+          la organización. Desde aquí se administrarán las
+          actividades, los horarios, las consultas y la configuración
+          del club.
         </p>
-      </div>
+      </section>
     </div>
   );
+}
+
+function PanelError({
+  title,
+  message,
+}: {
+  title: string;
+  message: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-8">
+      <h1 className="text-2xl font-bold text-red-900">
+        {title}
+      </h1>
+
+      <p className="mt-3 break-words leading-7 text-red-800">
+        {message}
+      </p>
+
+      <p className="mt-5 text-sm text-red-700">
+        Revisá también los Runtime Logs del deployment en Vercel.
+      </p>
+    </div>
+  );
+}
+
+function translateRole(
+  role: Membership["role"],
+) {
+  const labels: Record<Membership["role"], string> = {
+    owner: "Propietario",
+    admin: "Administrador",
+    operator: "Operador",
+    viewer: "Solo lectura",
+  };
+
+  return labels[role];
 }
