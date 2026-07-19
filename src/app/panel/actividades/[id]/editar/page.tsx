@@ -43,7 +43,6 @@ export default async function EditActivityPage({
         age_to,
         price,
         price_description,
-        capacity,
         contact_whatsapp,
         enrollment_open,
         is_published,
@@ -136,64 +135,43 @@ export default async function EditActivityPage({
 
       <div className="mt-8">
         <ActivityForm
-          action={updateAction}
-          instructors={instructors}
-          submitLabel="Guardar cambios"
-          initialValues={{
-            name: activity.name,
-            shortDescription:
-              activity.short_description ?? "",
-            description:
-              activity.description ?? "",
-            category:
-              activity.category ?? "",
-            level: activity.level ?? "",
-            ageFrom:
-              activity.age_from?.toString() ??
-              "",
-            ageTo:
-              activity.age_to?.toString() ??
-              "",
-            ageMaximumIsFree:
-              activity.age_to === null,
-            price:
-              activity.price?.toString() ?? "",
-            priceDescription:
-              activity.price_description ?? "",
-            capacity:
-              activity.capacity?.toString() ??
-              "",
-            contactWhatsapp:
-              activity.contact_whatsapp ?? "",
-            instructorId:
-              primaryInstructor?.instructor_id ??
-              "",
-            enrollmentOpen:
-              activity.enrollment_open,
-            isPublished:
-              activity.is_published,
-            schedules:
-              activity.activity_schedules.map(
-                (schedule) => ({
-                  dayOfWeek:
-                    schedule.day_of_week,
-                  startTime:
-                    schedule.start_time.slice(
-                      0,
-                      5,
-                    ),
-                  endTime:
-                    schedule.end_time.slice(
-                      0,
-                      5,
-                    ),
-                  locationName:
-                    schedule.location_name ??
-                    "",
-                }),
-              ),
-          }}
-        />
+  action={updateAction}
+  submitLabel="Guardar cambios"
+  initialValues={{
+    name: activity.name,
+    shortDescription:
+      activity.short_description ?? "",
+    description:
+      activity.description ?? "",
+    category: activity.category ?? "",
+    professor: activity.contact_name ?? "",
+    level: activity.level ?? "",
+    ageFrom:
+      activity.age_from?.toString() ?? "",
+    ageTo:
+      activity.age_to?.toString() ?? "",
+    ageMaximumIsFree:
+      activity.age_to === null,
+    price:
+      activity.price?.toString() ?? "",
+    priceDescription:
+      activity.price_description ?? "",
+    contactWhatsapp:
+      activity.contact_whatsapp ?? "",
+    schedules:
+      activity.activity_schedules.map(
+        (schedule) => ({
+          dayOfWeek: schedule.day_of_week,
+          startTime:
+            schedule.start_time.slice(0, 5),
+          endTime:
+            schedule.end_time.slice(0, 5),
+          locationName:
+            schedule.location_name ?? "",
+        }),
+      ),
+  }}
+/>
       </div>
     </div>
   );

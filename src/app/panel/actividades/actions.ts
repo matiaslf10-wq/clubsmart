@@ -23,17 +23,14 @@ type ActivityPayload = {
   name: string;
   shortDescription: string;
   description: string;
+  professor: string;
   category: string;
   level: ActivityLevel | null;
   ageFrom: number | null;
   ageTo: number | null;
   price: number | null;
   priceDescription: string;
-  capacity: number | null;
   contactWhatsapp: string;
-  instructorId: string;
-  enrollmentOpen: boolean;
-  isPublished: boolean;
   schedules: ReturnType<typeof readSchedules>;
 };
 
@@ -47,10 +44,8 @@ function readActivityPayload(
   | { data: ActivityPayload; error: null }
   | { data: null; error: string } {
   const name = readText(formData, "name");
-  const levelValue = readText(
-    formData,
-    "level",
-  );
+  const professor = readText(formData, "professor");
+  const levelValue = readText(formData, "level");
 
   const ageFrom = readOptionalNumber(
     formData,
@@ -58,8 +53,7 @@ function readActivityPayload(
   );
 
   const ageMaximumIsFree =
-    formData.get("age_maximum_is_free") ===
-    "on";
+    formData.get("age_maximum_is_free") === "on";
 
   const ageTo = ageMaximumIsFree
     ? null
@@ -68,16 +62,6 @@ function readActivityPayload(
   const price = readOptionalNumber(
     formData,
     "price",
-  );
-
-  const capacity = readOptionalNumber(
-    formData,
-    "capacity",
-  );
-
-  const instructorId = readText(
-    formData,
-    "instructor_id",
   );
 
   const schedules = readSchedules(formData);
@@ -90,6 +74,14 @@ function readActivityPayload(
     };
   }
 
+  if (professor.length < 2) {
+    return {
+      data: null,
+      error:
+        "Ingresá el nombre del profesor o responsable.",
+    };
+  }
+
   const level =
     activityLevels.includes(
       levelValue as ActivityLevel,
@@ -97,10 +89,7 @@ function readActivityPayload(
       ? (levelValue as ActivityLevel)
       : null;
 
-  if (
-    levelValue &&
-    level === null
-  ) {
+  if (levelValue && level === null) {
     return {
       data: null,
       error: "El nivel seleccionado no es válido.",
@@ -126,23 +115,6 @@ function readActivityPayload(
     };
   }
 
-  if (
-    capacity !== null &&
-    capacity <= 0
-  ) {
-    return {
-      data: null,
-      error: "El cupo debe ser mayor que cero.",
-    };
-  }
-
-  if (!instructorId) {
-    return {
-      data: null,
-      error: "Seleccioná un profesor o responsable.",
-    };
-  }
-
   const scheduleError =
     validateSchedules(schedules);
 
@@ -157,6 +129,7 @@ function readActivityPayload(
     error: null,
     data: {
       name,
+      professor,
       shortDescription: readText(
         formData,
         "short_description",
@@ -177,42 +150,12 @@ function readActivityPayload(
         formData,
         "price_description",
       ),
-      capacity,
       contactWhatsapp: readText(
         formData,
         "contact_whatsapp",
       ),
-      instructorId,
-      enrollmentOpen:
-        formData.get("enrollment_open") ===
-        "on",
-      isPublished:
-        formData.get("is_published") ===
-        "on",
       schedules,
     },
-  };
-}
-
-async function verifyInstructor(
-  instructorId: string,
-  organizationId: string,
-  clubId: string,
-) {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("instructors")
-    .select("id")
-    .eq("id", instructorId)
-    .eq("organization_id", organizationId)
-    .eq("club_id", clubId)
-    .eq("active", true)
-    .maybeSingle();
-
-  return {
-    valid: !error && Boolean(data),
-    error,
   };
 }
 
@@ -238,21 +181,6 @@ export async function createActivity(
   }
 
   const payload = parsed.data;
-
-  const instructorCheck =
-    await verifyInstructor(
-      payload.instructorId,
-      context.organizationId,
-      context.clubId,
-    );
-
-  if (!instructorCheck.valid) {
-    return {
-      error:
-        "El profesor seleccionado no pertenece a este club.",
-    };
-  }
-
   const supabase = await createClient();
   const baseSlug = createSlug(payload.name);
 
@@ -293,18 +221,17 @@ export async function createActivity(
         payload.description || null,
       category: payload.category || null,
       target_audience: null,
+      contact_name: payload.professor,
       age_from: payload.ageFrom,
       age_to: payload.ageTo,
       level: payload.level,
       price: payload.price,
       price_description:
         payload.priceDescription || null,
-      capacity: payload.capacity,
       contact_whatsapp:
         payload.contactWhatsapp || null,
-      enrollment_open:
-        payload.enrollmentOpen,
-      is_published: payload.isPublished,
+      enrollment_open: true,
+      is_published: true,
       active: true,
     })
     .select("id")
@@ -345,30 +272,6 @@ export async function createActivity(
 
     return {
       error: `No fue posible guardar los horarios: ${scheduleError.message}`,
-    };
-  }
-
-  const { error: instructorError } =
-    await supabase
-      .from("activity_instructors")
-      .insert({
-        activity_id: activity.id,
-        instructor_id:
-          payload.instructorId,
-        organization_id:
-          context.organizationId,
-        club_id: context.clubId,
-        is_primary: true,
-      });
-
-  if (instructorError) {
-    await supabase
-      .from("activities")
-      .delete()
-      .eq("id", activity.id);
-
-    return {
-      error: `No fue posible asignar el profesor: ${instructorError.message}`,
     };
   }
 
@@ -423,20 +326,6 @@ export async function updateActivity(
     };
   }
 
-  const instructorCheck =
-    await verifyInstructor(
-      payload.instructorId,
-      context.organizationId,
-      context.clubId,
-    );
-
-  if (!instructorCheck.valid) {
-    return {
-      error:
-        "El profesor seleccionado no pertenece a este club.",
-    };
-  }
-
   const { error: activityError } =
     await supabase
       .from("activities")
@@ -448,19 +337,18 @@ export async function updateActivity(
           payload.description || null,
         category: payload.category || null,
         target_audience: null,
+        contact_name: payload.professor,
         age_from: payload.ageFrom,
         age_to: payload.ageTo,
         level: payload.level,
         price: payload.price,
         price_description:
           payload.priceDescription || null,
-        capacity: payload.capacity,
         contact_whatsapp:
           payload.contactWhatsapp || null,
-        enrollment_open:
-          payload.enrollmentOpen,
-        is_published:
-          payload.isPublished,
+        enrollment_open: true,
+        is_published: true,
+        active: true,
       })
       .eq("id", activityId)
       .eq(
@@ -506,8 +394,7 @@ export async function updateActivity(
               schedule.startTime,
             end_time: schedule.endTime,
             location_name:
-              schedule.locationName ||
-              null,
+              schedule.locationName || null,
             active: true,
           }),
         ),
@@ -516,41 +403,6 @@ export async function updateActivity(
   if (insertSchedulesError) {
     return {
       error: `La actividad se actualizó, pero no fue posible guardar los nuevos horarios: ${insertSchedulesError.message}`,
-    };
-  }
-
-  const { error: deleteInstructorError } =
-    await supabase
-      .from("activity_instructors")
-      .delete()
-      .eq("activity_id", activityId)
-      .eq(
-        "organization_id",
-        context.organizationId,
-      );
-
-  if (deleteInstructorError) {
-    return {
-      error: `No fue posible reemplazar el profesor: ${deleteInstructorError.message}`,
-    };
-  }
-
-  const { error: insertInstructorError } =
-    await supabase
-      .from("activity_instructors")
-      .insert({
-        activity_id: activityId,
-        instructor_id:
-          payload.instructorId,
-        organization_id:
-          context.organizationId,
-        club_id: context.clubId,
-        is_primary: true,
-      });
-
-  if (insertInstructorError) {
-    return {
-      error: `No fue posible asignar el profesor: ${insertInstructorError.message}`,
     };
   }
 

@@ -19,39 +19,24 @@ type Schedule = {
   notes: string | null;
 };
 
-type Instructor = {
-  id: string;
-  display_name: string | null;
-  first_name: string;
-  last_name: string | null;
-  specialty: string | null;
-};
-
-type ActivityInstructorRelation = {
-  is_primary: boolean;
-  instructors: Instructor | Instructor[] | null;
-};
-
 type Activity = {
   id: string;
   name: string;
   slug: string;
   short_description: string | null;
   description: string | null;
+  contact_name: string | null;
   category: string | null;
-  target_audience: string | null;
   age_from: number | null;
   age_to: number | null;
   level: string | null;
   price: number | null;
   price_description: string | null;
   enrollment_open: boolean;
-  capacity: number | null;
   contact_whatsapp: string | null;
   cover_image_url: string | null;
   is_featured: boolean;
   activity_schedules: Schedule[];
-  activity_instructors: ActivityInstructorRelation[];
 };
 
 type Club = {
@@ -107,30 +92,6 @@ function formatLevel(level: string) {
   return labels[level] ?? level;
 }
 
-function getInstructorName(instructor: Instructor) {
-  if (instructor.display_name) {
-    return instructor.display_name;
-  }
-
-  return [instructor.first_name, instructor.last_name]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function normalizeInstructor(
-  relation: ActivityInstructorRelation,
-): Instructor | null {
-  if (!relation.instructors) {
-    return null;
-  }
-
-  if (Array.isArray(relation.instructors)) {
-    return relation.instructors[0] ?? null;
-  }
-
-  return relation.instructors;
-}
-
 function buildWhatsAppUrl(
   phone: string,
   clubName: string,
@@ -172,15 +133,14 @@ async function getClub(slug: string): Promise<Club | null> {
         slug,
         short_description,
         description,
+        contact_name,
         category,
-        target_audience,
         age_from,
         age_to,
         level,
         price,
         price_description,
         enrollment_open,
-        capacity,
         contact_whatsapp,
         cover_image_url,
         is_featured,
@@ -192,16 +152,6 @@ async function getClub(slug: string): Promise<Club | null> {
           end_time,
           location_name,
           notes
-        ),
-        activity_instructors (
-          is_primary,
-          instructors (
-            id,
-            display_name,
-            first_name,
-            last_name,
-            specialty
-          )
         )
       )
     `)
@@ -219,7 +169,10 @@ async function getClub(slug: string): Promise<Club | null> {
 
   if (error) {
     console.error("Error al cargar el club:", error);
-    throw new Error("No fue posible cargar la página del club.");
+
+    throw new Error(
+      "No fue posible cargar la página del club.",
+    );
   }
 
   return data as Club | null;
@@ -261,7 +214,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function ClubPage({ params }: PageProps) {
+export default async function ClubPage({
+  params,
+}: PageProps) {
   const { slug } = await params;
   const club = await getClub(slug);
 
@@ -269,7 +224,11 @@ export default async function ClubPage({ params }: PageProps) {
     notFound();
   }
 
-  const location = [club.address, club.city, club.province]
+  const location = [
+    club.address,
+    club.city,
+    club.province,
+  ]
     .filter(Boolean)
     .join(", ");
 
@@ -277,16 +236,25 @@ export default async function ClubPage({ params }: PageProps) {
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/" className="font-semibold text-slate-700">
+          <Link
+            href="/"
+            className="font-semibold text-slate-700"
+          >
             ClubSmart
           </Link>
 
           <nav className="flex items-center gap-5 text-sm font-medium">
-            <a href="#actividades" className="hover:text-blue-700">
+            <a
+              href="#actividades"
+              className="hover:text-blue-700"
+            >
               Actividades
             </a>
 
-            <a href="#contacto" className="hover:text-blue-700">
+            <a
+              href="#contacto"
+              className="hover:text-blue-700"
+            >
               Contacto
             </a>
           </nav>
@@ -308,12 +276,11 @@ export default async function ClubPage({ params }: PageProps) {
             <div
               className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-3xl font-bold shadow-lg"
               style={{
-                color: club.primary_color ?? "#2563EB",
+                color:
+                  club.primary_color ?? "#2563EB",
               }}
             >
               {club.logo_url ? (
-                // Usamos img temporalmente hasta configurar dominios
-                // permitidos para next/image.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={club.logo_url}
@@ -384,7 +351,9 @@ export default async function ClubPage({ params }: PageProps) {
           </div>
 
           <aside className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="font-semibold">Información</h2>
+            <h2 className="font-semibold">
+              Información
+            </h2>
 
             <dl className="mt-5 space-y-4 text-sm">
               {location ? (
@@ -392,6 +361,7 @@ export default async function ClubPage({ params }: PageProps) {
                   <dt className="font-medium text-slate-900">
                     Ubicación
                   </dt>
+
                   <dd className="mt-1 text-slate-600">
                     {location}
                   </dd>
@@ -403,6 +373,7 @@ export default async function ClubPage({ params }: PageProps) {
                   <dt className="font-medium text-slate-900">
                     Teléfono
                   </dt>
+
                   <dd className="mt-1 text-slate-600">
                     {club.phone}
                   </dd>
@@ -414,6 +385,7 @@ export default async function ClubPage({ params }: PageProps) {
                   <dt className="font-medium text-slate-900">
                     Correo electrónico
                   </dt>
+
                   <dd className="mt-1 break-all text-slate-600">
                     {club.email}
                   </dd>
@@ -439,8 +411,8 @@ export default async function ClubPage({ params }: PageProps) {
             </h2>
 
             <p className="mt-4 text-slate-600">
-              Conocé los días, horarios, responsables y valores de
-              cada actividad.
+              Conocé los días, horarios, responsables
+              y valores de cada actividad.
             </p>
           </div>
 
@@ -451,18 +423,20 @@ export default async function ClubPage({ params }: PageProps) {
           ) : (
             <div className="mt-10 grid gap-6 lg:grid-cols-2">
               {club.activities.map((activity) => {
-                const primaryRelation =
-                  activity.activity_instructors.find(
-                    (relation) => relation.is_primary,
-                  ) ?? activity.activity_instructors[0];
-
-                const instructor = primaryRelation
-                  ? normalizeInstructor(primaryRelation)
-                  : null;
-
                 const whatsappPhone =
                   activity.contact_whatsapp ??
                   club.whatsapp_phone;
+
+                const sortedSchedules = [
+                  ...activity.activity_schedules,
+                ].sort(
+                  (first, second) =>
+                    first.day_of_week -
+                      second.day_of_week ||
+                    first.start_time.localeCompare(
+                      second.start_time,
+                    ),
+                );
 
                 return (
                   <article
@@ -472,7 +446,9 @@ export default async function ClubPage({ params }: PageProps) {
                     {activity.cover_image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={activity.cover_image_url}
+                        src={
+                          activity.cover_image_url
+                        }
                         alt={activity.name}
                         className="h-56 w-full object-cover"
                       />
@@ -481,46 +457,43 @@ export default async function ClubPage({ params }: PageProps) {
                         className="flex h-36 items-end p-6"
                         style={{
                           background: `linear-gradient(135deg, ${
-                            club.primary_color ?? "#2563EB"
+                            club.primary_color ??
+                            "#2563EB"
                           }, ${
-                            club.secondary_color ?? "#0F172A"
+                            club.secondary_color ??
+                            "#0F172A"
                           })`,
                         }}
                       >
                         <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
-                          {activity.category ?? "Actividad"}
+                          {activity.category ??
+                            "Actividad"}
                         </p>
                       </div>
                     )}
 
                     <div className="p-6">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-2xl font-semibold">
-                            {activity.name}
-                          </h3>
+                        <h3 className="text-2xl font-semibold">
+                          {activity.name}
+                        </h3>
 
-                          {activity.target_audience ? (
-                            <p className="mt-1 text-sm text-slate-500">
-                              {activity.target_audience}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        {activity.enrollment_open ? (
-                          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-                            Inscripción abierta
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                            Consultar disponibilidad
-                          </span>
-                        )}
+                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                          Disponible
+                        </span>
                       </div>
 
                       {activity.short_description ? (
                         <p className="mt-4 leading-7 text-slate-600">
-                          {activity.short_description}
+                          {
+                            activity.short_description
+                          }
+                        </p>
+                      ) : null}
+
+                      {activity.description ? (
+                        <p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-600">
+                          {activity.description}
                         </p>
                       ) : null}
 
@@ -530,22 +503,20 @@ export default async function ClubPage({ params }: PageProps) {
                             Días y horarios
                           </p>
 
-                          {activity.activity_schedules.length > 0 ? (
+                          {sortedSchedules.length >
+                          0 ? (
                             <ul className="mt-2 space-y-2 text-sm text-slate-600">
-                              {activity.activity_schedules
-                                .sort(
-                                  (a, b) =>
-                                    a.day_of_week -
-                                      b.day_of_week ||
-                                    a.start_time.localeCompare(
-                                      b.start_time,
-                                    ),
-                                )
-                                .map((schedule) => (
-                                  <li key={schedule.id}>
+                              {sortedSchedules.map(
+                                (schedule) => (
+                                  <li
+                                    key={
+                                      schedule.id
+                                    }
+                                  >
                                     <span className="font-medium">
                                       {dayNames[
-                                        schedule.day_of_week
+                                        schedule
+                                          .day_of_week
                                       ] ?? "Día"}
                                     </span>{" "}
                                     {formatTime(
@@ -559,7 +530,8 @@ export default async function ClubPage({ params }: PageProps) {
                                       ? ` · ${schedule.location_name}`
                                       : ""}
                                   </li>
-                                ))}
+                                ),
+                              )}
                             </ul>
                           ) : (
                             <p className="mt-2 text-sm text-slate-500">
@@ -574,39 +546,54 @@ export default async function ClubPage({ params }: PageProps) {
                           </p>
 
                           <div className="mt-2 space-y-2 text-sm text-slate-600">
-                            {instructor ? (
+                            {activity.contact_name ? (
                               <p>
-                                Responsable:{" "}
-                                {getInstructorName(instructor)}
+                                Profesor o
+                                responsable:{" "}
+                                {
+                                  activity.contact_name
+                                }
                               </p>
                             ) : null}
 
                             {activity.level ? (
-                              <p>Nivel: {formatLevel(activity.level)}</p>
+                              <p>
+                                Nivel:{" "}
+                                {formatLevel(
+                                  activity.level,
+                                )}
+                              </p>
                             ) : null}
 
-                            {activity.age_from !== null ||
-activity.age_to !== null ? (
-  <p>
-    Edad:{" "}
-    {activity.age_from !== null
-      ? `desde ${activity.age_from} años`
-      : "sin edad mínima"}
+                            {activity.age_from !==
+                              null ||
+                            activity.age_to !==
+                              null ? (
+                              <p>
+                                Edad:{" "}
+                                {activity.age_from !==
+                                null
+                                  ? `desde ${activity.age_from} años`
+                                  : "sin edad mínima"}
+                                {activity.age_to !==
+                                null
+                                  ? ` hasta ${activity.age_to} años`
+                                  : " · edad máxima libre"}
+                              </p>
+                            ) : (
+                              <p>Edad: libre</p>
+                            )}
 
-    {activity.age_to !== null
-      ? ` hasta ${activity.age_to} años`
-      : " · edad máxima libre"}
-  </p>
-) : (
-  <p>Edad: libre</p>
-)}
-
-                            {activity.price !== null ? (
+                            {activity.price !==
+                            null ? (
                               <p>
                                 Valor:{" "}
                                 <span className="font-medium text-slate-900">
-                                  {formatPrice(activity.price)}
+                                  {formatPrice(
+                                    activity.price,
+                                  )}
                                 </span>
+
                                 {activity.price_description
                                   ? ` · ${activity.price_description}`
                                   : ""}
@@ -654,8 +641,8 @@ activity.age_to !== null ? (
             </h2>
 
             <p className="mt-4 leading-7 text-slate-300">
-              Consultá por actividades, horarios, valores e
-              inscripciones.
+              Consultá por actividades, horarios,
+              valores e inscripciones.
             </p>
 
             {club.whatsapp_phone ? (

@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { createActivity } from "@/app/panel/actividades/actions";
 import { ActivityForm } from "@/app/panel/actividades/activity-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,35 +16,6 @@ export default async function NewActivityPage() {
   ) {
     redirect("/panel/actividades");
   }
-
-  const supabase = await createClient();
-
-  const { data } = await supabase
-    .from("instructors")
-    .select(
-      "id, display_name, first_name, last_name",
-    )
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq("club_id", context.clubId)
-    .eq("active", true)
-    .order("first_name");
-
-  const instructors = (data ?? []).map(
-    (instructor) => ({
-      id: instructor.id,
-      name:
-        instructor.display_name ||
-        [
-          instructor.first_name,
-          instructor.last_name,
-        ]
-          .filter(Boolean)
-          .join(" "),
-    }),
-  );
 
   return (
     <div>
@@ -69,7 +39,6 @@ export default async function NewActivityPage() {
       <div className="mt-8">
         <ActivityForm
           action={createActivity}
-          instructors={instructors}
           submitLabel="Crear actividad"
         />
       </div>
