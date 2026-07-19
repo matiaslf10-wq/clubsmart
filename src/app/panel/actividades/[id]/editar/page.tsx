@@ -5,6 +5,11 @@ import { updateActivity } from "@/app/panel/actividades/actions";
 import { ActivityForm } from "@/app/panel/actividades/activity-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  removeActivityImage,
+  updateActivityImage,
+} from "@/app/panel/media-actions";
+import { ImageUploader } from "@/app/panel/image-uploader";
 
 type PageProps = {
   params: Promise<{
@@ -44,6 +49,7 @@ export default async function EditActivityPage({
   age_to,
   price,
   price_description,
+  cover_image_url,
   contact_whatsapp,
   activity_schedules (
     day_of_week,
@@ -99,6 +105,12 @@ export default async function EditActivityPage({
   const updateAction =
     updateActivity.bind(null, id);
 
+    const saveActivityImage =
+  updateActivityImage.bind(null, id);
+
+const deleteActivityImage =
+  removeActivityImage.bind(null, id);
+
   return (
     <div>
       <Link
@@ -123,44 +135,58 @@ export default async function EditActivityPage({
       </div>
 
       <div className="mt-8">
-        <ActivityForm
-  action={updateAction}
-  submitLabel="Guardar cambios"
-  initialValues={{
-    name: activity.name,
-    shortDescription:
-      activity.short_description ?? "",
-    description:
-      activity.description ?? "",
-    category: activity.category ?? "",
-    professor: activity.contact_name ?? "",
-    level: activity.level ?? "",
-    ageFrom:
-      activity.age_from?.toString() ?? "",
-    ageTo:
-      activity.age_to?.toString() ?? "",
-    ageMaximumIsFree:
-      activity.age_to === null,
-    price:
-      activity.price?.toString() ?? "",
-    priceDescription:
-      activity.price_description ?? "",
-    contactWhatsapp:
-      activity.contact_whatsapp ?? "",
-    schedules:
-      activity.activity_schedules.map(
-        (schedule) => ({
-          dayOfWeek: schedule.day_of_week,
-          startTime:
-            schedule.start_time.slice(0, 5),
-          endTime:
-            schedule.end_time.slice(0, 5),
-          locationName:
-            schedule.location_name ?? "",
-        }),
-      ),
-  }}
-/>
+  <ImageUploader
+    label="Imagen de la actividad"
+    description="Esta imagen aparecerá en la tarjeta pública de la actividad."
+    currentUrl={activity.cover_image_url}
+    storageFolder={`${context.organizationId}/clubs/${context.clubId}/activities/${activity.id}`}
+    aspect="cover"
+    saveImage={saveActivityImage}
+    removeImage={deleteActivityImage}
+  />
+</div>
+
+<div className="mt-8">
+  <ActivityForm
+    action={updateAction}
+    submitLabel="Guardar cambios"
+    initialValues={{
+      name: activity.name,
+      shortDescription:
+        activity.short_description ?? "",
+      description:
+        activity.description ?? "",
+      category: activity.category ?? "",
+      professor:
+        activity.contact_name ?? "",
+      level: activity.level ?? "",
+      ageFrom:
+        activity.age_from?.toString() ?? "",
+      ageTo:
+        activity.age_to?.toString() ?? "",
+      ageMaximumIsFree:
+        activity.age_to === null,
+      price:
+        activity.price?.toString() ?? "",
+      priceDescription:
+        activity.price_description ?? "",
+      contactWhatsapp:
+        activity.contact_whatsapp ?? "",
+      schedules:
+        activity.activity_schedules.map(
+          (schedule) => ({
+            dayOfWeek:
+              schedule.day_of_week,
+            startTime:
+              schedule.start_time.slice(0, 5),
+            endTime:
+              schedule.end_time.slice(0, 5),
+            locationName:
+              schedule.location_name ?? "",
+          }),
+        ),
+    }}
+  />
       </div>
     </div>
   );

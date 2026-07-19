@@ -4,6 +4,11 @@ import { redirect } from "next/navigation";
 import { ClubForm } from "@/app/panel/club/club-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  removeClubImage,
+  updateClubImage,
+} from "@/app/panel/media-actions";
+import { ImageUploader } from "@/app/panel/image-uploader";
 
 export const dynamic = "force-dynamic";
 
@@ -23,20 +28,22 @@ export default async function ClubSettingsPage() {
     await supabase
       .from("clubs")
       .select(`
-        id,
-        name,
-        slug,
-        short_description,
-        description,
-        email,
-        phone,
-        whatsapp_phone,
-        address,
-        city,
-        province,
-        primary_color,
-        secondary_color
-      `)
+  id,
+  name,
+  slug,
+  short_description,
+  description,
+  email,
+  phone,
+  whatsapp_phone,
+  address,
+  city,
+  province,
+  primary_color,
+  secondary_color,
+  logo_url,
+  cover_image_url
+`)
       .eq("id", context.clubId)
       .eq(
         "organization_id",
@@ -55,6 +62,18 @@ export default async function ClubSettingsPage() {
       "No se encontró el club vinculado con esta organización.",
     );
   }
+
+  const saveLogo =
+  updateClubImage.bind(null, "logo");
+
+const removeLogo =
+  removeClubImage.bind(null, "logo");
+
+const saveCover =
+  updateClubImage.bind(null, "cover");
+
+const removeCover =
+  removeClubImage.bind(null, "cover");
 
   return (
     <div>
@@ -83,6 +102,28 @@ export default async function ClubSettingsPage() {
           Ver página pública
         </Link>
       </div>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+  <ImageUploader
+    label="Logo del club"
+    description="Se muestra en la cabecera de la página pública. Conviene usar una imagen cuadrada."
+    currentUrl={club.logo_url}
+    storageFolder={`${context.organizationId}/clubs/${context.clubId}/logo`}
+    aspect="square"
+    saveImage={saveLogo}
+    removeImage={removeLogo}
+  />
+
+  <ImageUploader
+    label="Portada del club"
+    description="Se utiliza como imagen de fondo en la presentación principal del club."
+    currentUrl={club.cover_image_url}
+    storageFolder={`${context.organizationId}/clubs/${context.clubId}/cover`}
+    aspect="cover"
+    saveImage={saveCover}
+    removeImage={removeCover}
+  />
+</div>
 
       <div className="mt-8">
         <ClubForm
