@@ -95,6 +95,18 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
+function formatLevel(level: string) {
+  const labels: Record<string, string> = {
+    basico: "Básico",
+    intermedio: "Intermedio",
+    avanzado: "Avanzado",
+    recreativo: "Recreativo",
+    competitivo: "Competitivo",
+  };
+
+  return labels[level] ?? level;
+}
+
 function getInstructorName(instructor: Instructor) {
   if (instructor.display_name) {
     return instructor.display_name;
@@ -570,17 +582,24 @@ export default async function ClubPage({ params }: PageProps) {
                             ) : null}
 
                             {activity.level ? (
-                              <p>Nivel: {activity.level}</p>
+                              <p>Nivel: {formatLevel(activity.level)}</p>
                             ) : null}
 
-                            {activity.age_from !== null ? (
-                              <p>
-                                Edad: desde {activity.age_from}
-                                {activity.age_to !== null
-                                  ? ` hasta ${activity.age_to} años`
-                                  : " años"}
-                              </p>
-                            ) : null}
+                            {activity.age_from !== null ||
+activity.age_to !== null ? (
+  <p>
+    Edad:{" "}
+    {activity.age_from !== null
+      ? `desde ${activity.age_from} años`
+      : "sin edad mínima"}
+
+    {activity.age_to !== null
+      ? ` hasta ${activity.age_to} años`
+      : " · edad máxima libre"}
+  </p>
+) : (
+  <p>Edad: libre</p>
+)}
 
                             {activity.price !== null ? (
                               <p>

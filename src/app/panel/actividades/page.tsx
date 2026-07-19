@@ -111,88 +111,91 @@ export default async function ActivitiesPage() {
         </section>
       ) : (
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[2fr_1fr_1fr_1fr] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 md:grid">
-            <span>Actividad</span>
-            <span>Precio</span>
-            <span>Inscripción</span>
-            <span>Publicación</span>
-          </div>
+          <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 ...">
+  <span>Actividad</span>
+  <span>Precio</span>
+  <span>Inscripción</span>
+  <span>Publicación</span>
+  <span />
+</div>
 
           <div className="divide-y divide-slate-200">
             {activities.map((activity) => (
-              <article
-                key={activity.id}
-                className="grid gap-4 px-6 py-5 md:grid-cols-[2fr_1fr_1fr_1fr] md:items-center"
-              >
-                <div>
-                  <p className="font-semibold text-slate-900">
-                    {activity.name}
-                  </p>
+             <article
+  key={activity.id}
+  className="grid gap-4 px-6 py-5 md:grid-cols-[2fr_1fr_1fr_1fr_auto] md:items-center"
+>
+  <div>
+    <p className="font-semibold text-slate-900">
+      {activity.name}
+    </p>
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    {[
-                      activity.category,
-                      activity.target_audience,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "Sin categoría"}
-                  </p>
-                </div>
+    <p className="mt-1 text-sm text-slate-500">
+      {activity.category || "Sin categoría"}
+    </p>
+  </div>
 
-                <div>
-                  <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-                    Precio
-                  </p>
+  <div>
+    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
+      Precio
+    </p>
 
-                  <p className="mt-1 text-sm text-slate-700 md:mt-0">
-                    {activity.price !== null
-                      ? formatPrice(activity.price)
-                      : "Sin precio"}
+    <p className="mt-1 text-sm text-slate-700 md:mt-0">
+      {activity.price !== null
+        ? formatPrice(activity.price)
+        : "Sin precio"}
 
-                    {activity.price_description
-                      ? ` · ${activity.price_description}`
-                      : ""}
-                  </p>
-                </div>
+      {activity.price_description
+        ? ` · ${activity.price_description}`
+        : ""}
+    </p>
+  </div>
 
-                <div>
-                  <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-                    Inscripción
-                  </p>
+  <div>
+    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
+      Inscripción
+    </p>
 
-                  <span
-                    className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
-                      activity.enrollment_open
-                        ? "bg-green-100 text-green-800"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {activity.enrollment_open
-                      ? "Abierta"
-                      : "Cerrada"}
-                  </span>
-                </div>
+    <span
+      className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
+        activity.enrollment_open
+          ? "bg-green-100 text-green-800"
+          : "bg-slate-100 text-slate-600"
+      }`}
+    >
+      {activity.enrollment_open
+        ? "Abierta"
+        : "Cerrada"}
+    </span>
+  </div>
 
-                <div>
-                  <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-                    Publicación
-                  </p>
+  <div>
+    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
+      Publicación
+    </p>
 
-                  <span
-                    className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
-                      activity.is_published &&
-                      activity.active
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-amber-100 text-amber-800"
-                    }`}
-                  >
-                    {activity.is_published &&
-                    activity.active
-                      ? "Publicada"
-                      : "Borrador"}
-                  </span>
-                </div>
-              </article>
+    <span
+      className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
+        activity.is_published && activity.active
+          ? "bg-blue-100 text-blue-800"
+          : "bg-amber-100 text-amber-800"
+      }`}
+    >
+      {activity.is_published && activity.active
+        ? "Publicada"
+        : "Borrador"}
+    </span>
+  </div>
+
+  <div>
+    <Link
+      href={`/panel/actividades/${activity.id}/editar`}
+      className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+    >
+      Editar
+    </Link>
+  </div>
+</article>
             ))}
           </div>
         </section>

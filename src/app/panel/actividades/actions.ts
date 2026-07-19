@@ -3,102 +3,107 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  activityLevels,
+  createSlug,
+  readOptionalNumber,
+  readSchedules,
+  readText,
+  validateSchedules,
+  type ActivityLevel,
+} from "@/lib/activities/form-utils";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
 
-export type CreateActivityState = {
+export type ActivityFormState = {
   error: string | null;
 };
 
-function readText(formData: FormData, field: string) {
-  const value = formData.get(field);
+type ActivityPayload = {
+  name: string;
+  shortDescription: string;
+  description: string;
+  category: string;
+  level: ActivityLevel | null;
+  ageFrom: number | null;
+  ageTo: number | null;
+  price: number | null;
+  priceDescription: string;
+  capacity: number | null;
+  contactWhatsapp: string;
+  instructorId: string;
+  enrollmentOpen: boolean;
+  isPublished: boolean;
+  schedules: ReturnType<typeof readSchedules>;
+};
 
-  return typeof value === "string" ? value.trim() : "";
+function canManageActivities(role: string) {
+  return role === "owner" || role === "admin";
 }
 
-function createSlug(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function readOptionalNumber(
+function readActivityPayload(
   formData: FormData,
-  field: string,
-) {
-  const value = readText(formData, field);
-
-  if (!value) {
-    return null;
-  }
-
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : null;
-}
-
-export async function createActivity(
-  _previousState: CreateActivityState,
-  formData: FormData,
-): Promise<CreateActivityState> {
-  const context = await getAdminContext();
-
-  if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    return {
-      error:
-        "Tu usuario no tiene permisos para crear actividades.",
-    };
-  }
-
+):
+  | { data: ActivityPayload; error: null }
+  | { data: null; error: string } {
   const name = readText(formData, "name");
-  const shortDescription = readText(
+  const levelValue = readText(
     formData,
-    "short_description",
-  );
-  const description = readText(formData, "description");
-  const category = readText(formData, "category");
-  const targetAudience = readText(
-    formData,
-    "target_audience",
-  );
-  const level = readText(formData, "level");
-  const priceDescription = readText(
-    formData,
-    "price_description",
-  );
-  const contactWhatsapp = readText(
-    formData,
-    "contact_whatsapp",
+    "level",
   );
 
   const ageFrom = readOptionalNumber(
     formData,
     "age_from",
   );
-  const ageTo = readOptionalNumber(formData, "age_to");
-  const price = readOptionalNumber(formData, "price");
+
+  const ageMaximumIsFree =
+    formData.get("age_maximum_is_free") ===
+    "on";
+
+  const ageTo = ageMaximumIsFree
+    ? null
+    : readOptionalNumber(formData, "age_to");
+
+  const price = readOptionalNumber(
+    formData,
+    "price",
+  );
+
   const capacity = readOptionalNumber(
     formData,
     "capacity",
   );
 
-  const isPublished =
-    formData.get("is_published") === "on";
+  const instructorId = readText(
+    formData,
+    "instructor_id",
+  );
 
-  const enrollmentOpen =
-    formData.get("enrollment_open") === "on";
+  const schedules = readSchedules(formData);
 
   if (name.length < 2) {
     return {
+      data: null,
       error:
-        "El nombre de la actividad debe tener al menos dos caracteres.",
+        "El nombre debe tener al menos dos caracteres.",
+    };
+  }
+
+  const level =
+    activityLevels.includes(
+      levelValue as ActivityLevel,
+    )
+      ? (levelValue as ActivityLevel)
+      : null;
+
+  if (
+    levelValue &&
+    level === null
+  ) {
+    return {
+      data: null,
+      error: "El nivel seleccionado no es válido.",
     };
   }
 
@@ -108,40 +113,155 @@ export async function createActivity(
     ageTo < ageFrom
   ) {
     return {
+      data: null,
       error:
-        "La edad máxima no puede ser menor que la edad mínima.",
+        "La edad máxima no puede ser menor que la mínima.",
     };
   }
 
   if (price !== null && price < 0) {
     return {
+      data: null,
       error: "El precio no puede ser negativo.",
     };
   }
 
-  if (capacity !== null && capacity <= 0) {
+  if (
+    capacity !== null &&
+    capacity <= 0
+  ) {
     return {
-      error:
-        "El cupo debe ser mayor que cero.",
+      data: null,
+      error: "El cupo debe ser mayor que cero.",
     };
   }
 
-  const baseSlug = createSlug(name);
+  if (!instructorId) {
+    return {
+      data: null,
+      error: "Seleccioná un profesor o responsable.",
+    };
+  }
 
-  if (!baseSlug) {
+  const scheduleError =
+    validateSchedules(schedules);
+
+  if (scheduleError) {
+    return {
+      data: null,
+      error: scheduleError,
+    };
+  }
+
+  return {
+    error: null,
+    data: {
+      name,
+      shortDescription: readText(
+        formData,
+        "short_description",
+      ),
+      description: readText(
+        formData,
+        "description",
+      ),
+      category: readText(
+        formData,
+        "category",
+      ),
+      level,
+      ageFrom,
+      ageTo,
+      price,
+      priceDescription: readText(
+        formData,
+        "price_description",
+      ),
+      capacity,
+      contactWhatsapp: readText(
+        formData,
+        "contact_whatsapp",
+      ),
+      instructorId,
+      enrollmentOpen:
+        formData.get("enrollment_open") ===
+        "on",
+      isPublished:
+        formData.get("is_published") ===
+        "on",
+      schedules,
+    },
+  };
+}
+
+async function verifyInstructor(
+  instructorId: string,
+  organizationId: string,
+  clubId: string,
+) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("instructors")
+    .select("id")
+    .eq("id", instructorId)
+    .eq("organization_id", organizationId)
+    .eq("club_id", clubId)
+    .eq("active", true)
+    .maybeSingle();
+
+  return {
+    valid: !error && Boolean(data),
+    error,
+  };
+}
+
+export async function createActivity(
+  _previousState: ActivityFormState,
+  formData: FormData,
+): Promise<ActivityFormState> {
+  const context = await getAdminContext();
+
+  if (!canManageActivities(context.role)) {
     return {
       error:
-        "No fue posible generar una dirección válida para la actividad.",
+        "Tu usuario no tiene permisos para crear actividades.",
+    };
+  }
+
+  const parsed = readActivityPayload(formData);
+
+  if (parsed.error || !parsed.data) {
+    return {
+      error: parsed.error,
+    };
+  }
+
+  const payload = parsed.data;
+
+  const instructorCheck =
+    await verifyInstructor(
+      payload.instructorId,
+      context.organizationId,
+      context.clubId,
+    );
+
+  if (!instructorCheck.valid) {
+    return {
+      error:
+        "El profesor seleccionado no pertenece a este club.",
     };
   }
 
   const supabase = await createClient();
+  const baseSlug = createSlug(payload.name);
 
-  const { data: existingActivities } = await supabase
-    .from("activities")
-    .select("slug")
-    .eq("club_id", context.clubId)
-    .like("slug", `${baseSlug}%`);
+  const { data: existingActivities } =
+    await supabase
+      .from("activities")
+      .select("slug")
+      .eq("club_id", context.clubId)
+      .like("slug", `${baseSlug}%`);
 
   const usedSlugs = new Set(
     (existingActivities ?? []).map(
@@ -157,39 +277,302 @@ export async function createActivity(
     suffix += 1;
   }
 
-  const { error } = await supabase
+  const {
+    data: activity,
+    error: activityError,
+  } = await supabase
     .from("activities")
     .insert({
       organization_id: context.organizationId,
       club_id: context.clubId,
-      name,
+      name: payload.name,
       slug,
-      short_description: shortDescription || null,
-      description: description || null,
-      category: category || null,
-      target_audience: targetAudience || null,
-      age_from: ageFrom,
-      age_to: ageTo,
-      level: level || null,
-      price,
-      price_description: priceDescription || null,
-      capacity,
-      contact_whatsapp: contactWhatsapp || null,
-      enrollment_open: enrollmentOpen,
-      is_published: isPublished,
+      short_description:
+        payload.shortDescription || null,
+      description:
+        payload.description || null,
+      category: payload.category || null,
+      target_audience: null,
+      age_from: payload.ageFrom,
+      age_to: payload.ageTo,
+      level: payload.level,
+      price: payload.price,
+      price_description:
+        payload.priceDescription || null,
+      capacity: payload.capacity,
+      contact_whatsapp:
+        payload.contactWhatsapp || null,
+      enrollment_open:
+        payload.enrollmentOpen,
+      is_published: payload.isPublished,
       active: true,
-    });
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    console.error("Error creando actividad:", error);
-
+  if (activityError || !activity) {
     return {
-      error: `No fue posible crear la actividad: ${error.message}`,
+      error: `No fue posible crear la actividad: ${
+        activityError?.message ??
+        "Error desconocido"
+      }`,
     };
   }
 
-  revalidatePath("/panel/actividades");
-  revalidatePath(`/clubes/${context.clubSlug}`);
+  const schedulesToInsert =
+    payload.schedules.map((schedule) => ({
+      organization_id: context.organizationId,
+      club_id: context.clubId,
+      activity_id: activity.id,
+      day_of_week: schedule.dayOfWeek,
+      start_time: schedule.startTime,
+      end_time: schedule.endTime,
+      location_name:
+        schedule.locationName || null,
+      active: true,
+    }));
+
+  const { error: scheduleError } =
+    await supabase
+      .from("activity_schedules")
+      .insert(schedulesToInsert);
+
+  if (scheduleError) {
+    await supabase
+      .from("activities")
+      .delete()
+      .eq("id", activity.id);
+
+    return {
+      error: `No fue posible guardar los horarios: ${scheduleError.message}`,
+    };
+  }
+
+  const { error: instructorError } =
+    await supabase
+      .from("activity_instructors")
+      .insert({
+        activity_id: activity.id,
+        instructor_id:
+          payload.instructorId,
+        organization_id:
+          context.organizationId,
+        club_id: context.clubId,
+        is_primary: true,
+      });
+
+  if (instructorError) {
+    await supabase
+      .from("activities")
+      .delete()
+      .eq("id", activity.id);
+
+    return {
+      error: `No fue posible asignar el profesor: ${instructorError.message}`,
+    };
+  }
+
+  revalidateActivityPages(
+    context.clubSlug,
+  );
 
   redirect("/panel/actividades");
+}
+
+export async function updateActivity(
+  activityId: string,
+  _previousState: ActivityFormState,
+  formData: FormData,
+): Promise<ActivityFormState> {
+  const context = await getAdminContext();
+
+  if (!canManageActivities(context.role)) {
+    return {
+      error:
+        "Tu usuario no tiene permisos para editar actividades.",
+    };
+  }
+
+  const parsed = readActivityPayload(formData);
+
+  if (parsed.error || !parsed.data) {
+    return {
+      error: parsed.error,
+    };
+  }
+
+  const payload = parsed.data;
+  const supabase = await createClient();
+
+  const { data: existingActivity } =
+    await supabase
+      .from("activities")
+      .select("id")
+      .eq("id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId)
+      .maybeSingle();
+
+  if (!existingActivity) {
+    return {
+      error:
+        "La actividad no existe o no pertenece a este club.",
+    };
+  }
+
+  const instructorCheck =
+    await verifyInstructor(
+      payload.instructorId,
+      context.organizationId,
+      context.clubId,
+    );
+
+  if (!instructorCheck.valid) {
+    return {
+      error:
+        "El profesor seleccionado no pertenece a este club.",
+    };
+  }
+
+  const { error: activityError } =
+    await supabase
+      .from("activities")
+      .update({
+        name: payload.name,
+        short_description:
+          payload.shortDescription || null,
+        description:
+          payload.description || null,
+        category: payload.category || null,
+        target_audience: null,
+        age_from: payload.ageFrom,
+        age_to: payload.ageTo,
+        level: payload.level,
+        price: payload.price,
+        price_description:
+          payload.priceDescription || null,
+        capacity: payload.capacity,
+        contact_whatsapp:
+          payload.contactWhatsapp || null,
+        enrollment_open:
+          payload.enrollmentOpen,
+        is_published:
+          payload.isPublished,
+      })
+      .eq("id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (activityError) {
+    return {
+      error: `No fue posible actualizar la actividad: ${activityError.message}`,
+    };
+  }
+
+  const { error: deleteSchedulesError } =
+    await supabase
+      .from("activity_schedules")
+      .delete()
+      .eq("activity_id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (deleteSchedulesError) {
+    return {
+      error: `La actividad se actualizó, pero no fue posible reemplazar sus horarios: ${deleteSchedulesError.message}`,
+    };
+  }
+
+  const { error: insertSchedulesError } =
+    await supabase
+      .from("activity_schedules")
+      .insert(
+        payload.schedules.map(
+          (schedule) => ({
+            organization_id:
+              context.organizationId,
+            club_id: context.clubId,
+            activity_id: activityId,
+            day_of_week:
+              schedule.dayOfWeek,
+            start_time:
+              schedule.startTime,
+            end_time: schedule.endTime,
+            location_name:
+              schedule.locationName ||
+              null,
+            active: true,
+          }),
+        ),
+      );
+
+  if (insertSchedulesError) {
+    return {
+      error: `La actividad se actualizó, pero no fue posible guardar los nuevos horarios: ${insertSchedulesError.message}`,
+    };
+  }
+
+  const { error: deleteInstructorError } =
+    await supabase
+      .from("activity_instructors")
+      .delete()
+      .eq("activity_id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (deleteInstructorError) {
+    return {
+      error: `No fue posible reemplazar el profesor: ${deleteInstructorError.message}`,
+    };
+  }
+
+  const { error: insertInstructorError } =
+    await supabase
+      .from("activity_instructors")
+      .insert({
+        activity_id: activityId,
+        instructor_id:
+          payload.instructorId,
+        organization_id:
+          context.organizationId,
+        club_id: context.clubId,
+        is_primary: true,
+      });
+
+  if (insertInstructorError) {
+    return {
+      error: `No fue posible asignar el profesor: ${insertInstructorError.message}`,
+    };
+  }
+
+  revalidateActivityPages(
+    context.clubSlug,
+    activityId,
+  );
+
+  redirect("/panel/actividades");
+}
+
+function revalidateActivityPages(
+  clubSlug: string,
+  activityId?: string,
+) {
+  revalidatePath("/panel");
+  revalidatePath("/panel/actividades");
+  revalidatePath(`/clubes/${clubSlug}`);
+
+  if (activityId) {
+    revalidatePath(
+      `/panel/actividades/${activityId}/editar`,
+    );
+  }
 }

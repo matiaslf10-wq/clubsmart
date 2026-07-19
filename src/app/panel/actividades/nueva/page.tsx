@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { ActivityForm } from "./activity-form";
-
+import { createActivity } from "@/app/panel/actividades/actions";
+import { ActivityForm } from "@/app/panel/actividades/activity-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,35 @@ export default async function NewActivityPage() {
   ) {
     redirect("/panel/actividades");
   }
+
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("instructors")
+    .select(
+      "id, display_name, first_name, last_name",
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .eq("active", true)
+    .order("first_name");
+
+  const instructors = (data ?? []).map(
+    (instructor) => ({
+      id: instructor.id,
+      name:
+        instructor.display_name ||
+        [
+          instructor.first_name,
+          instructor.last_name,
+        ]
+          .filter(Boolean)
+          .join(" "),
+    }),
+  );
 
   return (
     <div>
@@ -34,15 +64,14 @@ export default async function NewActivityPage() {
         <h1 className="mt-3 text-3xl font-bold">
           Nueva actividad
         </h1>
-
-        <p className="mt-3 text-slate-600">
-          Cargá la información general. Los días, horarios,
-          responsables y fotografías se agregarán después.
-        </p>
       </div>
 
       <div className="mt-8">
-        <ActivityForm />
+        <ActivityForm
+          action={createActivity}
+          instructors={instructors}
+          submitLabel="Crear actividad"
+        />
       </div>
     </div>
   );
