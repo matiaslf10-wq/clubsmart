@@ -25,7 +25,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
 
-        setAll(cookiesToSet, headers) {
+        setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
@@ -43,18 +43,14 @@ export async function updateSession(request: NextRequest) {
               );
             },
           );
-
-          Object.entries(headers).forEach(([key, value]) => {
-            supabaseResponse.headers.set(key, value);
-          });
         },
       },
     },
   );
 
   /*
-   * Verifica y renueva el token antes de continuar.
-   * No usar getSession() para proteger rutas del servidor.
+   * Es importante no agregar lógica entre createServerClient
+   * y getClaims(), porque puede dificultar la renovación de sesión.
    */
   await supabase.auth.getClaims();
 
