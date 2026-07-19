@@ -87,6 +87,7 @@ function formatLevel(level: string) {
     avanzado: "Avanzado",
     recreativo: "Recreativo",
     competitivo: "Competitivo",
+    todos: "Todos los niveles",
   };
 
   return labels[level] ?? level;

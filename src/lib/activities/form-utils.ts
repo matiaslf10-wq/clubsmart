@@ -4,6 +4,7 @@ export const activityLevels = [
   "avanzado",
   "recreativo",
   "competitivo",
+  "todos",
 ] as const;
 
 export type ActivityLevel =

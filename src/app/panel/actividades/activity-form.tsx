@@ -53,6 +53,7 @@ const levelOptions = [
   { value: "avanzado", label: "Avanzado" },
   { value: "recreativo", label: "Recreativo" },
   { value: "competitivo", label: "Competitivo" },
+  { value: "todos", label: "Todos los niveles" },
 ];
 
 const defaultValues: ActivityInitialValues = {
