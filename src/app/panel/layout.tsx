@@ -13,7 +13,8 @@ export default async function PanelLayout({
 }>) {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.getClaims();
+  const { data, error } =
+    await supabase.auth.getClaims();
 
   if (error || !data?.claims?.sub) {
     redirect("/login");
@@ -22,19 +23,43 @@ export default async function PanelLayout({
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/panel" className="font-bold">
             ClubSmart
           </Link>
 
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold"
+          <nav className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/panel"
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
             >
-              Cerrar sesión
-            </button>
-          </form>
+              Resumen
+            </Link>
+
+            <Link
+              href="/panel/actividades"
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+            >
+              Actividades
+            </Link>
+
+            <Link
+              href="/clubes/club-estrella"
+              target="_blank"
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+            >
+              Ver página pública
+            </Link>
+
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-100"
+              >
+                Cerrar sesión
+              </button>
+            </form>
+          </nav>
         </div>
       </header>
 
