@@ -14,24 +14,30 @@ export async function createClient() {
     );
   }
 
-  return createServerClient(supabaseUrl, supabasePublishableKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
+  return createServerClient(
+    supabaseUrl,
+    supabasePublishableKey,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
 
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        } catch {
-          /*
-           * En un Server Component puede no estar permitido modificar cookies.
-           * Más adelante agregaremos el proxy encargado de renovar sesiones.
-           */
-        }
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(
+              ({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              },
+            );
+          } catch {
+            /*
+             * En un Server Component no siempre se pueden modificar
+             * cookies. El proxy se ocupa de renovar la sesión.
+             */
+          }
+        },
       },
     },
-  });
+  );
 }

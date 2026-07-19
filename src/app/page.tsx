@@ -133,9 +133,12 @@ export default function HomePage() {
               Ver demo
             </Link>
 
-            <span className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-              Ingresar
-            </span>
+            <Link
+  href="/login"
+  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+>
+  Ingresar
+</Link>
           </div>
         </div>
       </header>
