@@ -15,13 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   const supabase = await createClient();
 
-  const {
-    data: { claims },
-  } = await supabase.auth.getClaims();
+  const { data } = await supabase.auth.getClaims();
 
-  if (claims?.sub) {
-    redirect("/panel");
-  }
+if (data?.claims.sub) {
+  redirect("/panel");
+}
 
   return (
     <main className="grid min-h-screen bg-slate-50 lg:grid-cols-2">

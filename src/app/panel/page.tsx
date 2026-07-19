@@ -37,12 +37,12 @@ export const dynamic = "force-dynamic";
 export default async function PanelPage() {
   const supabase = await createClient();
 
-  const {
-    data: { claims },
-  } = await supabase.auth.getClaims();
+  const { data } = await supabase.auth.getClaims();
 
-  const userId =
-    typeof claims?.sub === "string" ? claims.sub : null;
+const userId =
+  typeof data?.claims.sub === "string"
+    ? data.claims.sub
+    : null;
 
   if (!userId) {
     redirect("/login");

@@ -13,13 +13,11 @@ export default async function PanelLayout({
 }>) {
   const supabase = await createClient();
 
-  const {
-    data: { claims },
-  } = await supabase.auth.getClaims();
+  const { data } = await supabase.auth.getClaims();
 
-  if (!claims?.sub) {
-    redirect("/login");
-  }
+if (data?.claims.sub) {
+  redirect("/panel");
+}
 
   return (
     <div className="min-h-screen bg-slate-100">
