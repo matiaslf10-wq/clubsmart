@@ -33,30 +33,25 @@ export default async function EditActivityPage({
     await supabase
       .from("activities")
       .select(`
-        id,
-        name,
-        short_description,
-        description,
-        category,
-        level,
-        age_from,
-        age_to,
-        price,
-        price_description,
-        contact_whatsapp,
-        enrollment_open,
-        is_published,
-        activity_schedules (
-          day_of_week,
-          start_time,
-          end_time,
-          location_name
-        ),
-        activity_instructors (
-          instructor_id,
-          is_primary
-        )
-      `)
+  id,
+  name,
+  short_description,
+  description,
+  contact_name,
+  category,
+  level,
+  age_from,
+  age_to,
+  price,
+  price_description,
+  contact_whatsapp,
+  activity_schedules (
+    day_of_week,
+    start_time,
+    end_time,
+    location_name
+  )
+`)
       .eq("id", id)
       .eq(
         "organization_id",
@@ -100,12 +95,6 @@ export default async function EditActivityPage({
         .filter(Boolean)
         .join(" "),
   }));
-
-  const primaryInstructor =
-    activity.activity_instructors.find(
-      (relation) => relation.is_primary,
-    ) ??
-    activity.activity_instructors[0];
 
   const updateAction =
     updateActivity.bind(null, id);
