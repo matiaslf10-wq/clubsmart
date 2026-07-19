@@ -1,0 +1,667 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { createClient } from "@/lib/supabase/server";
+
+type PageProps = {
+  params: Promise<{
+    slug: string;
+  }>;
+};
+
+type Schedule = {
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  location_name: string | null;
+  notes: string | null;
+};
+
+type Instructor = {
+  id: string;
+  display_name: string | null;
+  first_name: string;
+  last_name: string | null;
+  specialty: string | null;
+};
+
+type ActivityInstructorRelation = {
+  is_primary: boolean;
+  instructors: Instructor | Instructor[] | null;
+};
+
+type Activity = {
+  id: string;
+  name: string;
+  slug: string;
+  short_description: string | null;
+  description: string | null;
+  category: string | null;
+  target_audience: string | null;
+  age_from: number | null;
+  age_to: number | null;
+  level: string | null;
+  price: number | null;
+  price_description: string | null;
+  enrollment_open: boolean;
+  capacity: number | null;
+  contact_whatsapp: string | null;
+  cover_image_url: string | null;
+  is_featured: boolean;
+  activity_schedules: Schedule[];
+  activity_instructors: ActivityInstructorRelation[];
+};
+
+type Club = {
+  id: string;
+  name: string;
+  slug: string;
+  short_description: string | null;
+  description: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp_phone: string | null;
+  address: string | null;
+  city: string | null;
+  province: string | null;
+  logo_url: string | null;
+  cover_image_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  activities: Activity[];
+};
+
+const dayNames: Record<number, string> = {
+  1: "Lunes",
+  2: "Martes",
+  3: "Miércoles",
+  4: "Jueves",
+  5: "Viernes",
+  6: "Sábado",
+  7: "Domingo",
+};
+
+function formatTime(value: string) {
+  return value.slice(0, 5);
+}
+
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function getInstructorName(instructor: Instructor) {
+  if (instructor.display_name) {
+    return instructor.display_name;
+  }
+
+  return [instructor.first_name, instructor.last_name]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function normalizeInstructor(
+  relation: ActivityInstructorRelation,
+): Instructor | null {
+  if (!relation.instructors) {
+    return null;
+  }
+
+  if (Array.isArray(relation.instructors)) {
+    return relation.instructors[0] ?? null;
+  }
+
+  return relation.instructors;
+}
+
+function buildWhatsAppUrl(
+  phone: string,
+  clubName: string,
+  activityName?: string,
+) {
+  const message = activityName
+    ? `Hola, quería consultar por la actividad ${activityName} del ${clubName}.`
+    : `Hola, quería realizar una consulta sobre ${clubName}.`;
+
+  return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+    message,
+  )}`;
+}
+
+async function getClub(slug: string): Promise<Club | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("clubs")
+    .select(`
+      id,
+      name,
+      slug,
+      short_description,
+      description,
+      email,
+      phone,
+      whatsapp_phone,
+      address,
+      city,
+      province,
+      logo_url,
+      cover_image_url,
+      primary_color,
+      secondary_color,
+      activities (
+        id,
+        name,
+        slug,
+        short_description,
+        description,
+        category,
+        target_audience,
+        age_from,
+        age_to,
+        level,
+        price,
+        price_description,
+        enrollment_open,
+        capacity,
+        contact_whatsapp,
+        cover_image_url,
+        is_featured,
+        display_order,
+        activity_schedules (
+          id,
+          day_of_week,
+          start_time,
+          end_time,
+          location_name,
+          notes
+        ),
+        activity_instructors (
+          is_primary,
+          instructors (
+            id,
+            display_name,
+            first_name,
+            last_name,
+            specialty
+          )
+        )
+      )
+    `)
+    .eq("slug", slug)
+    .eq("is_published", true)
+    .eq("active", true)
+    .eq("activities.is_published", true)
+    .eq("activities.active", true)
+    .eq("activities.activity_schedules.active", true)
+    .order("display_order", {
+      referencedTable: "activities",
+      ascending: true,
+    })
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error al cargar el club:", error);
+    throw new Error("No fue posible cargar la página del club.");
+  }
+
+  return data as Club | null;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const club = await getClub(slug);
+
+  if (!club) {
+    return {
+      title: "Club no encontrado",
+    };
+  }
+
+  const description =
+    club.short_description ??
+    club.description ??
+    `Conocé las actividades de ${club.name}.`;
+
+  return {
+    title: club.name,
+    description,
+    openGraph: {
+      title: club.name,
+      description,
+      type: "website",
+      images: club.cover_image_url
+        ? [
+            {
+              url: club.cover_image_url,
+              alt: club.name,
+            },
+          ]
+        : [],
+    },
+  };
+}
+
+export default async function ClubPage({ params }: PageProps) {
+  const { slug } = await params;
+  const club = await getClub(slug);
+
+  if (!club) {
+    notFound();
+  }
+
+  const location = [club.address, club.city, club.province]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+          <Link href="/" className="font-semibold text-slate-700">
+            ClubSmart
+          </Link>
+
+          <nav className="flex items-center gap-5 text-sm font-medium">
+            <a href="#actividades" className="hover:text-blue-700">
+              Actividades
+            </a>
+
+            <a href="#contacto" className="hover:text-blue-700">
+              Contacto
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      <section className="relative overflow-hidden bg-slate-900 text-white">
+        {club.cover_image_url ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-30"
+            style={{
+              backgroundImage: `url("${club.cover_image_url}")`,
+            }}
+          />
+        ) : null}
+
+        <div className="relative mx-auto max-w-6xl px-6 py-20 sm:py-28">
+          <div className="max-w-3xl">
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-3xl font-bold shadow-lg"
+              style={{
+                color: club.primary_color ?? "#2563EB",
+              }}
+            >
+              {club.logo_url ? (
+                // Usamos img temporalmente hasta configurar dominios
+                // permitidos para next/image.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={club.logo_url}
+                  alt={`Logo de ${club.name}`}
+                  className="h-full w-full rounded-2xl object-cover"
+                />
+              ) : (
+                club.name.charAt(0)
+              )}
+            </div>
+
+            <p className="mt-8 text-sm font-semibold uppercase tracking-[0.25em] text-blue-200">
+              Club social y deportivo
+            </p>
+
+            <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-6xl">
+              {club.name}
+            </h1>
+
+            {club.short_description ? (
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
+                {club.short_description}
+              </p>
+            ) : null}
+
+            <div className="mt-8 flex flex-wrap gap-4">
+              <a
+                href="#actividades"
+                className="rounded-lg bg-white px-5 py-3 font-semibold text-slate-900 transition hover:bg-slate-100"
+              >
+                Ver actividades
+              </a>
+
+              {club.whatsapp_phone ? (
+                <a
+                  href={buildWhatsAppUrl(
+                    club.whatsapp_phone,
+                    club.name,
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-white/40 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
+                >
+                  Consultar por WhatsApp
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <div className="grid gap-10 lg:grid-cols-[2fr_1fr]">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wider text-blue-700">
+              Sobre el club
+            </p>
+
+            <h2 className="mt-3 text-3xl font-bold">
+              Un espacio para la comunidad
+            </h2>
+
+            <p className="mt-5 max-w-3xl whitespace-pre-line leading-8 text-slate-600">
+              {club.description ??
+                club.short_description ??
+                "Próximamente encontrarás más información institucional del club."}
+            </p>
+          </div>
+
+          <aside className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="font-semibold">Información</h2>
+
+            <dl className="mt-5 space-y-4 text-sm">
+              {location ? (
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Ubicación
+                  </dt>
+                  <dd className="mt-1 text-slate-600">
+                    {location}
+                  </dd>
+                </div>
+              ) : null}
+
+              {club.phone ? (
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Teléfono
+                  </dt>
+                  <dd className="mt-1 text-slate-600">
+                    {club.phone}
+                  </dd>
+                </div>
+              ) : null}
+
+              {club.email ? (
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Correo electrónico
+                  </dt>
+                  <dd className="mt-1 break-all text-slate-600">
+                    {club.email}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </aside>
+        </div>
+      </section>
+
+      <section
+        id="actividades"
+        className="border-y border-slate-200 bg-white"
+      >
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-wider text-blue-700">
+              Propuestas
+            </p>
+
+            <h2 className="mt-3 text-3xl font-bold">
+              Actividades del club
+            </h2>
+
+            <p className="mt-4 text-slate-600">
+              Conocé los días, horarios, responsables y valores de
+              cada actividad.
+            </p>
+          </div>
+
+          {club.activities.length === 0 ? (
+            <div className="mt-10 rounded-2xl bg-slate-50 p-8">
+              Todavía no hay actividades publicadas.
+            </div>
+          ) : (
+            <div className="mt-10 grid gap-6 lg:grid-cols-2">
+              {club.activities.map((activity) => {
+                const primaryRelation =
+                  activity.activity_instructors.find(
+                    (relation) => relation.is_primary,
+                  ) ?? activity.activity_instructors[0];
+
+                const instructor = primaryRelation
+                  ? normalizeInstructor(primaryRelation)
+                  : null;
+
+                const whatsappPhone =
+                  activity.contact_whatsapp ??
+                  club.whatsapp_phone;
+
+                return (
+                  <article
+                    key={activity.id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  >
+                    {activity.cover_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={activity.cover_image_url}
+                        alt={activity.name}
+                        className="h-56 w-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-36 items-end p-6"
+                        style={{
+                          background: `linear-gradient(135deg, ${
+                            club.primary_color ?? "#2563EB"
+                          }, ${
+                            club.secondary_color ?? "#0F172A"
+                          })`,
+                        }}
+                      >
+                        <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
+                          {activity.category ?? "Actividad"}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="p-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-2xl font-semibold">
+                            {activity.name}
+                          </h3>
+
+                          {activity.target_audience ? (
+                            <p className="mt-1 text-sm text-slate-500">
+                              {activity.target_audience}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {activity.enrollment_open ? (
+                          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                            Inscripción abierta
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                            Consultar disponibilidad
+                          </span>
+                        )}
+                      </div>
+
+                      {activity.short_description ? (
+                        <p className="mt-4 leading-7 text-slate-600">
+                          {activity.short_description}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-6 grid gap-5 border-t border-slate-100 pt-6 sm:grid-cols-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            Días y horarios
+                          </p>
+
+                          {activity.activity_schedules.length > 0 ? (
+                            <ul className="mt-2 space-y-2 text-sm text-slate-600">
+                              {activity.activity_schedules
+                                .sort(
+                                  (a, b) =>
+                                    a.day_of_week -
+                                      b.day_of_week ||
+                                    a.start_time.localeCompare(
+                                      b.start_time,
+                                    ),
+                                )
+                                .map((schedule) => (
+                                  <li key={schedule.id}>
+                                    <span className="font-medium">
+                                      {dayNames[
+                                        schedule.day_of_week
+                                      ] ?? "Día"}
+                                    </span>{" "}
+                                    {formatTime(
+                                      schedule.start_time,
+                                    )}{" "}
+                                    a{" "}
+                                    {formatTime(
+                                      schedule.end_time,
+                                    )}
+                                    {schedule.location_name
+                                      ? ` · ${schedule.location_name}`
+                                      : ""}
+                                  </li>
+                                ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-2 text-sm text-slate-500">
+                              Horarios a confirmar.
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            Información
+                          </p>
+
+                          <div className="mt-2 space-y-2 text-sm text-slate-600">
+                            {instructor ? (
+                              <p>
+                                Responsable:{" "}
+                                {getInstructorName(instructor)}
+                              </p>
+                            ) : null}
+
+                            {activity.level ? (
+                              <p>Nivel: {activity.level}</p>
+                            ) : null}
+
+                            {activity.age_from !== null ? (
+                              <p>
+                                Edad: desde {activity.age_from}
+                                {activity.age_to !== null
+                                  ? ` hasta ${activity.age_to} años`
+                                  : " años"}
+                              </p>
+                            ) : null}
+
+                            {activity.price !== null ? (
+                              <p>
+                                Valor:{" "}
+                                <span className="font-medium text-slate-900">
+                                  {formatPrice(activity.price)}
+                                </span>
+                                {activity.price_description
+                                  ? ` · ${activity.price_description}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      {whatsappPhone ? (
+                        <a
+                          href={buildWhatsAppUrl(
+                            whatsappPhone,
+                            club.name,
+                            activity.name,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-6 inline-flex rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                        >
+                          Consultar esta actividad
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section
+        id="contacto"
+        className="mx-auto max-w-6xl px-6 py-16"
+      >
+        <div className="rounded-3xl bg-slate-900 px-6 py-12 text-white sm:px-10">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-wider text-blue-300">
+              Contacto
+            </p>
+
+            <h2 className="mt-3 text-3xl font-bold">
+              Comunicate con {club.name}
+            </h2>
+
+            <p className="mt-4 leading-7 text-slate-300">
+              Consultá por actividades, horarios, valores e
+              inscripciones.
+            </p>
+
+            {club.whatsapp_phone ? (
+              <a
+                href={buildWhatsAppUrl(
+                  club.whatsapp_phone,
+                  club.name,
+                )}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-7 inline-flex rounded-lg bg-white px-5 py-3 font-semibold text-slate-900 transition hover:bg-slate-100"
+              >
+                Enviar mensaje por WhatsApp
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <p>{club.name}</p>
+          <p>Desarrollado con ClubSmart</p>
+        </div>
+      </footer>
+    </main>
+  );
+}
