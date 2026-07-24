@@ -7,7 +7,6 @@ import type { MemberFormState } from "@/app/panel/personas/actions";
 type ActivityOption = {
   id: string;
   name: string;
-  price: number | null;
 };
 
 export type MemberInitialValues = {
@@ -18,7 +17,6 @@ export type MemberInitialValues = {
   email: string;
   phone: string;
   activityId: string;
-  monthlyAmount: string;
 };
 
 type MemberFormProps = {
@@ -39,7 +37,6 @@ const defaultValues: MemberInitialValues = {
   email: "",
   phone: "",
   activityId: "",
-  monthlyAmount: "",
 };
 
 const inputClassName =
@@ -119,6 +116,7 @@ export function MemberForm({
               id="dni"
               name="dni"
               inputMode="numeric"
+              autoComplete="off"
               defaultValue={initialValues.dni}
               className={inputClassName}
               placeholder="Sin puntos"
@@ -164,6 +162,7 @@ export function MemberForm({
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               defaultValue={
                 initialValues.email
               }
@@ -183,6 +182,7 @@ export function MemberForm({
               id="phone"
               name="phone"
               inputMode="tel"
+              autoComplete="tel"
               defaultValue={
                 initialValues.phone
               }
@@ -194,77 +194,53 @@ export function MemberForm({
 
       <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
         <h2 className="text-xl font-semibold">
-          Actividad y cuota
+          Actividad
         </h2>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="activity_id"
-              className="text-sm font-medium text-slate-700"
-            >
-              Actividad *
-            </label>
+        <p className="mt-2 text-sm text-slate-500">
+          Seleccioná la actividad en la que participa.
+          El importe se administra por separado según
+          la actividad y el período.
+        </p>
 
-            <select
-              id="activity_id"
-              name="activity_id"
-              required
-              defaultValue={
-                initialValues.activityId
-              }
-              className={inputClassName}
-            >
-              <option value="">
-                Seleccionar actividad
+        <div className="mt-6">
+          <label
+            htmlFor="activity_id"
+            className="text-sm font-medium text-slate-700"
+          >
+            Actividad *
+          </label>
+
+          <select
+            id="activity_id"
+            name="activity_id"
+            required
+            defaultValue={
+              initialValues.activityId
+            }
+            className={inputClassName}
+          >
+            <option value="">
+              Seleccionar actividad
+            </option>
+
+            {activities.map((activity) => (
+              <option
+                key={activity.id}
+                value={activity.id}
+              >
+                {activity.name}
               </option>
+            ))}
+          </select>
 
-              {activities.map((activity) => (
-                <option
-                  key={activity.id}
-                  value={activity.id}
-                >
-                  {activity.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="monthly_amount"
-              className="text-sm font-medium text-slate-700"
-            >
-              Importe mensual *
-            </label>
-
-            <input
-              id="monthly_amount"
-              name="monthly_amount"
-              type="number"
-              required
-              min={0}
-              step="0.01"
-              defaultValue={
-                initialValues.monthlyAmount
-              }
-              className={inputClassName}
-              placeholder="25000"
-            />
-
-            <p className="mt-2 text-sm text-slate-500">
-              Este importe se utilizará al
-              generar las cuotas mensuales.
+          {activities.length === 0 ? (
+            <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Primero tenés que crear al menos una
+              actividad.
             </p>
-          </div>
+          ) : null}
         </div>
-
-        {activities.length === 0 ? (
-          <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Primero tenés que crear al menos una
-            actividad.
-          </p>
-        ) : null}
       </section>
 
       {state.error ? (

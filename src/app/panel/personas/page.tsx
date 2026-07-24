@@ -15,22 +15,27 @@ type PageProps = {
 
 export const dynamic = "force-dynamic";
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 function formatDni(value: string | null) {
   if (!value) {
     return "Sin DNI";
   }
 
-  return new Intl.NumberFormat(
-    "es-AR",
-  ).format(Number(value));
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return value;
+  }
+
+  return new Intl.NumberFormat("es-AR").format(
+    numericValue,
+  );
+}
+
+function sanitizeSearch(value: string) {
+  return value
+    .replace(/[%_,()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export default async function MembersPage({
@@ -46,9 +51,9 @@ export default async function MembersPage({
         ? "todos"
         : "activos";
 
-  const search = (
-    params.buscar ?? ""
-  ).trim();
+  const search = sanitizeSearch(
+    params.buscar ?? "",
+  );
 
   const supabase = await createClient();
 
@@ -66,7 +71,6 @@ export default async function MembersPage({
       member_activities (
         id,
         activity_id,
-        monthly_amount,
         active,
         activities (
           id,
@@ -135,8 +139,8 @@ export default async function MembersPage({
           </h1>
 
           <p className="mt-3 text-slate-600">
-            Administrá jugadores, participantes,
-            actividades e importes mensuales.
+            Administrá jugadores, participantes
+            y sus actividades.
           </p>
         </div>
 
@@ -153,6 +157,7 @@ export default async function MembersPage({
           <p className="text-sm text-slate-500">
             Mostradas
           </p>
+
           <p className="mt-2 text-3xl font-bold">
             {members.length}
           </p>
@@ -162,6 +167,7 @@ export default async function MembersPage({
           <p className="text-sm text-slate-500">
             Activas
           </p>
+
           <p className="mt-2 text-3xl font-bold text-green-700">
             {activeCount}
           </p>
@@ -171,6 +177,7 @@ export default async function MembersPage({
           <p className="text-sm text-slate-500">
             Inactivas
           </p>
+
           <p className="mt-2 text-3xl font-bold text-slate-500">
             {inactiveCount}
           </p>
@@ -216,9 +223,11 @@ export default async function MembersPage({
               <option value="activos">
                 Activas
               </option>
+
               <option value="inactivos">
                 Inactivas
               </option>
+
               <option value="todos">
                 Todas
               </option>
@@ -228,7 +237,7 @@ export default async function MembersPage({
           <div className="flex items-end">
             <button
               type="submit"
-              className="w-full rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-700"
+              className="w-full rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700"
             >
               Aplicar filtros
             </button>
@@ -249,11 +258,10 @@ export default async function MembersPage({
         </section>
       ) : (
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[1.5fr_1fr_1.2fr_1fr_0.8fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 lg:grid">
+          <div className="hidden grid-cols-[1.5fr_1fr_1.2fr_0.8fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 lg:grid">
             <span>Persona</span>
             <span>DNI</span>
             <span>Actividad</span>
-            <span>Importe</span>
             <span>Estado</span>
             <span />
           </div>
@@ -269,10 +277,11 @@ export default async function MembersPage({
               const activityValue =
                 activeRelation?.activities;
 
-              const activity =
-                Array.isArray(activityValue)
-                  ? activityValue[0]
-                  : activityValue;
+              const activity = Array.isArray(
+                activityValue,
+              )
+                ? activityValue[0]
+                : activityValue;
 
               const memberName =
                 `${member.first_name} ${member.last_name}`;
@@ -280,7 +289,7 @@ export default async function MembersPage({
               return (
                 <article
                   key={member.id}
-                  className="grid gap-4 px-6 py-5 lg:grid-cols-[1.5fr_1fr_1.2fr_1fr_0.8fr_auto] lg:items-center"
+                  className="grid gap-4 px-6 py-5 lg:grid-cols-[1.5fr_1fr_1.2fr_0.8fr_auto] lg:items-center"
                 >
                   <div>
                     <p className="font-semibold text-slate-900">
@@ -300,6 +309,7 @@ export default async function MembersPage({
                     <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
                       DNI
                     </p>
+
                     <p className="mt-1 text-sm lg:mt-0">
                       {formatDni(member.dni)}
                     </p>
@@ -309,6 +319,7 @@ export default async function MembersPage({
                     <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
                       Actividad
                     </p>
+
                     <p className="mt-1 text-sm lg:mt-0">
                       {activity?.name ??
                         (member.active
@@ -319,25 +330,14 @@ export default async function MembersPage({
 
                   <div>
                     <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
-                      Importe
+                      Estado
                     </p>
-                    <p className="mt-1 text-sm font-medium lg:mt-0">
-                      {activeRelation
-                        ? formatMoney(
-                            Number(
-                              activeRelation.monthly_amount,
-                            ),
-                          )
-                        : "—"}
-                    </p>
-                  </div>
 
-                  <div>
                     <span
                       className={
                         member.active
-                          ? "inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800"
-                          : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
+                          ? "mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 lg:mt-0"
+                          : "mt-1 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 lg:mt-0"
                       }
                     >
                       {member.active
@@ -349,7 +349,7 @@ export default async function MembersPage({
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href={`/panel/personas/${member.id}/editar`}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
                       Editar
                     </Link>

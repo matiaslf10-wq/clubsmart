@@ -49,7 +49,6 @@ export default async function EditMemberPage({
       member_activities (
         id,
         activity_id,
-        monthly_amount,
         active
       )
     `)
@@ -62,7 +61,9 @@ export default async function EditMemberPage({
     .maybeSingle();
 
   if (memberError) {
-    throw new Error(memberError.message);
+    throw new Error(
+      `No fue posible cargar la persona: ${memberError.message}`,
+    );
   }
 
   if (!member) {
@@ -74,7 +75,7 @@ export default async function EditMemberPage({
     error: activitiesError,
   } = await supabase
     .from("activities")
-    .select("id, name, price")
+    .select("id, name")
     .eq(
       "organization_id",
       context.organizationId,
@@ -85,7 +86,7 @@ export default async function EditMemberPage({
 
   if (activitiesError) {
     throw new Error(
-      activitiesError.message,
+      `No fue posible cargar las actividades: ${activitiesError.message}`,
     );
   }
 
@@ -146,9 +147,6 @@ export default async function EditMemberPage({
             phone: member.phone ?? "",
             activityId:
               activeRelation?.activity_id ??
-              "",
-            monthlyAmount:
-              activeRelation?.monthly_amount?.toString() ??
               "",
           }}
         />

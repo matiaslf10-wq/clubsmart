@@ -18,7 +18,6 @@ type MemberPayload = {
   email: string;
   phone: string;
   activityId: string;
-  monthlyAmount: number;
 };
 
 function canManageMembers(role: string) {
@@ -98,15 +97,6 @@ function readMemberPayload(
     "activity_id",
   );
 
-  const monthlyAmountValue = readText(
-    formData,
-    "monthly_amount",
-  );
-
-  const monthlyAmount = Number(
-    monthlyAmountValue,
-  );
-
   if (firstName.length < 2) {
     return {
       data: null,
@@ -146,17 +136,6 @@ function readMemberPayload(
     };
   }
 
-  if (
-    !Number.isFinite(monthlyAmount) ||
-    monthlyAmount < 0
-  ) {
-    return {
-      data: null,
-      error:
-        "El importe mensual debe ser un número válido.",
-    };
-  }
-
   return {
     error: null,
     data: {
@@ -167,7 +146,6 @@ function readMemberPayload(
       email,
       phone,
       activityId,
-      monthlyAmount,
     },
   };
 }
@@ -291,8 +269,6 @@ export async function createMember(
         club_id: context.clubId,
         member_id: member.id,
         activity_id: payload.activityId,
-        monthly_amount:
-          payload.monthlyAmount,
         active: true,
         start_date: new Date()
           .toISOString()
@@ -440,8 +416,6 @@ export async function updateMember(
       await supabase
         .from("member_activities")
         .update({
-          monthly_amount:
-            payload.monthlyAmount,
         })
         .eq("id", currentRelation.id)
         .eq(
@@ -487,8 +461,6 @@ export async function updateMember(
           club_id: context.clubId,
           member_id: memberId,
           activity_id: payload.activityId,
-          monthly_amount:
-            payload.monthlyAmount,
           active: true,
           start_date: new Date()
             .toISOString()
