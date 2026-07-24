@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import { DeleteActivityButton } from "@/app/panel/actividades/delete-activity-button";
 
 export const dynamic = "force-dynamic";
 
@@ -187,14 +188,19 @@ export default async function ActivitiesPage() {
     </span>
   </div>
 
-  <div>
-    <Link
-      href={`/panel/actividades/${activity.id}/editar`}
-      className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-    >
-      Editar
-    </Link>
-  </div>
+  <div className="flex flex-wrap gap-2">
+  <Link
+    href={`/panel/actividades/${activity.id}/editar`}
+    className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+  >
+    Editar
+  </Link>
+
+  <DeleteActivityButton
+    activityId={activity.id}
+    activityName={activity.name}
+  />
+</div>
 </article>
             ))}
           </div>

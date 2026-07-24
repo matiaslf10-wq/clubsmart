@@ -41,8 +41,14 @@ function canManageActivities(role: string) {
 function readActivityPayload(
   formData: FormData,
 ):
-  | { data: ActivityPayload; error: null }
-  | { data: null; error: string } {
+  | {
+      data: ActivityPayload;
+      error: null;
+    }
+  | {
+      data: null;
+      error: string;
+    } {
   const name = readText(formData, "name");
   const professor = readText(formData, "professor");
   const levelValue = readText(formData, "level");
@@ -82,12 +88,11 @@ function readActivityPayload(
     };
   }
 
-  const level =
-    activityLevels.includes(
-      levelValue as ActivityLevel,
-    )
-      ? (levelValue as ActivityLevel)
-      : null;
+  const level = activityLevels.includes(
+    levelValue as ActivityLevel,
+  )
+    ? (levelValue as ActivityLevel)
+    : null;
 
   if (levelValue && level === null) {
     return {
@@ -182,7 +187,15 @@ export async function createActivity(
 
   const payload = parsed.data;
   const supabase = await createClient();
+
   const baseSlug = createSlug(payload.name);
+
+  if (!baseSlug) {
+    return {
+      error:
+        "No fue posible generar una dirección válida para la actividad.",
+    };
+  }
 
   const { data: existingActivities } =
     await supabase
@@ -268,16 +281,18 @@ export async function createActivity(
     await supabase
       .from("activities")
       .delete()
-      .eq("id", activity.id);
+      .eq("id", activity.id)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
 
     return {
       error: `No fue posible guardar los horarios: ${scheduleError.message}`,
     };
   }
 
-  revalidateActivityPages(
-    context.clubSlug,
-  );
+  revalidateActivityPages(context.clubSlug);
 
   redirect("/panel/actividades");
 }
@@ -307,17 +322,25 @@ export async function updateActivity(
   const payload = parsed.data;
   const supabase = await createClient();
 
-  const { data: existingActivity } =
-    await supabase
-      .from("activities")
-      .select("id")
-      .eq("id", activityId)
-      .eq(
-        "organization_id",
-        context.organizationId,
-      )
-      .eq("club_id", context.clubId)
-      .maybeSingle();
+  const {
+    data: existingActivity,
+    error: existingActivityError,
+  } = await supabase
+    .from("activities")
+    .select("id")
+    .eq("id", activityId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .maybeSingle();
+
+  if (existingActivityError) {
+    return {
+      error: `No fue posible consultar la actividad: ${existingActivityError.message}`,
+    };
+  }
 
   if (!existingActivity) {
     return {
@@ -354,7 +377,8 @@ export async function updateActivity(
       .eq(
         "organization_id",
         context.organizationId,
-      );
+      )
+      .eq("club_id", context.clubId);
 
   if (activityError) {
     return {
@@ -394,7 +418,8 @@ export async function updateActivity(
               schedule.startTime,
             end_time: schedule.endTime,
             location_name:
-              schedule.locationName || null,
+              schedule.locationName ||
+              null,
             active: true,
           }),
         ),
@@ -412,6 +437,139 @@ export async function updateActivity(
   );
 
   redirect("/panel/actividades");
+}
+
+export async function deleteActivity(
+  activityId: string,
+): Promise<{
+  error: string | null;
+}> {
+  const context = await getAdminContext();
+
+  if (!canManageActivities(context.role)) {
+    return {
+      error:
+        "Tu usuario no tiene permisos para eliminar actividades.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: activity,
+    error: readError,
+  } = await supabase
+    .from("activities")
+    .select("id, cover_image_storage_path")
+    .eq("id", activityId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .maybeSingle();
+
+  if (readError) {
+    return {
+      error: `No fue posible consultar la actividad: ${readError.message}`,
+    };
+  }
+
+  if (!activity) {
+    return {
+      error:
+        "La actividad no existe o no pertenece a este club.",
+    };
+  }
+
+  const { error: schedulesError } =
+    await supabase
+      .from("activity_schedules")
+      .delete()
+      .eq("activity_id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (schedulesError) {
+    return {
+      error: `No fue posible eliminar los horarios: ${schedulesError.message}`,
+    };
+  }
+
+  const { error: instructorRelationsError } =
+    await supabase
+      .from("activity_instructors")
+      .delete()
+      .eq("activity_id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (instructorRelationsError) {
+    return {
+      error: `No fue posible eliminar las relaciones de profesores: ${instructorRelationsError.message}`,
+    };
+  }
+
+  const { error: activityImagesError } =
+    await supabase
+      .from("activity_images")
+      .delete()
+      .eq("activity_id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      );
+
+  if (activityImagesError) {
+    return {
+      error: `No fue posible eliminar las imágenes relacionadas: ${activityImagesError.message}`,
+    };
+  }
+
+  const { error: activityError } =
+    await supabase
+      .from("activities")
+      .delete()
+      .eq("id", activityId)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId);
+
+  if (activityError) {
+    return {
+      error: `No fue posible eliminar la actividad: ${activityError.message}`,
+    };
+  }
+
+  if (activity.cover_image_storage_path) {
+    const { error: storageError } =
+      await supabase.storage
+        .from("club-media")
+        .remove([
+          activity.cover_image_storage_path,
+        ]);
+
+    if (storageError) {
+      console.error(
+        "La actividad fue eliminada, pero no pudo borrarse su imagen:",
+        storageError,
+      );
+    }
+  }
+
+  revalidatePath("/panel");
+  revalidatePath("/panel/actividades");
+  revalidatePath(`/clubes/${context.clubSlug}`);
+
+  return {
+    error: null,
+  };
 }
 
 function revalidateActivityPages(
