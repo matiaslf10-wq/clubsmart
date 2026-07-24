@@ -44,6 +44,13 @@ export default async function PanelLayout({
             </Link>
 
             <Link
+  href="/panel/personas"
+  className="text-sm font-medium text-slate-600 hover:text-blue-700"
+>
+  Personas
+</Link>
+
+            <Link
   href="/panel/club"
   className="text-sm font-medium text-slate-600 hover:text-blue-700"
 >
