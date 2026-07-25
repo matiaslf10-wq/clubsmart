@@ -69,7 +69,7 @@ const dayNames: Record<number, string> = {
 };
 
 const mercadoPagoLink =
-  "https://mpago.la/REEMPLAZAR-POR-TU-LINK";
+  "https://mpago.la/TU-LINK-REAL";
 
 function formatTime(value: string) {
   return value.slice(0, 5);
