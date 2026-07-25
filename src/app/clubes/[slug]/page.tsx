@@ -604,20 +604,29 @@ export default async function ClubPage({
                         </div>
                       </div>
 
-                      {whatsappPhone ? (
-                        <a
-                          href={buildWhatsAppUrl(
-                            whatsappPhone,
-                            club.name,
-                            activity.name,
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-6 inline-flex rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                        >
-                          Consultar esta actividad
-                        </a>
-                      ) : null}
+                      <div className="mt-6 flex flex-wrap gap-3">
+  <Link
+    href={`/clubes/${club.slug}/pagar?actividad=${activity.id}`}
+    className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
+  >
+    Pagar online
+  </Link>
+
+  {whatsappPhone ? (
+    <a
+      href={buildWhatsAppUrl(
+        whatsappPhone,
+        club.name,
+        activity.name,
+      )}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+    >
+      Consultar esta actividad
+    </a>
+  ) : null}
+</div>
                     </div>
                   </article>
                 );
