@@ -614,7 +614,7 @@ export default async function ClubPage({
   rel="noopener noreferrer"
   className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
 >
-  Pagar con Mercado Pago
+  Pagar on line
 </a>
 
   {whatsappPhone ? (
