@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { PaymentForm } from "@/app/clubes/[slug]/pagar/payment-form";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,7 +23,13 @@ export default async function PaymentPage({
   const { actividad } = await searchParams;
 
   if (!actividad) {
-    notFound();
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No se identificó la actividad"
+        description="El enlace de pago no contiene el identificador de la actividad."
+      />
+    );
   }
 
   const supabase = createAdminClient();
@@ -38,13 +43,46 @@ export default async function PaymentPage({
       id,
       organization_id,
       name,
-      slug
+      slug,
+      active,
+      is_published
     `)
     .eq("slug", slug)
     .maybeSingle();
 
-  if (clubError || !club) {
-    notFound();
+  if (clubError) {
+    console.error(
+      "Error buscando club para pago:",
+      clubError,
+    );
+
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No fue posible consultar el club"
+        description={clubError.message}
+      />
+    );
+  }
+
+  if (!club) {
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No se encontró el club"
+        description={`No existe un club con el identificador "${slug}".`}
+      />
+    );
+  }
+
+  if (!club.active || !club.is_published) {
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="El club no está disponible"
+        description="El club se encuentra desactivado o su página todavía no está publicada."
+      />
+    );
   }
 
   const {
@@ -55,7 +93,9 @@ export default async function PaymentPage({
     .select(`
       id,
       name,
-      short_description
+      short_description,
+      active,
+      is_published
     `)
     .eq("id", actividad)
     .eq("club_id", club.id)
@@ -63,12 +103,44 @@ export default async function PaymentPage({
       "organization_id",
       club.organization_id,
     )
-    .eq("active", true)
-    .eq("is_published", true)
     .maybeSingle();
 
-  if (activityError || !activity) {
-    notFound();
+  if (activityError) {
+    console.error(
+      "Error buscando actividad para pago:",
+      activityError,
+    );
+
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No fue posible consultar la actividad"
+        description={activityError.message}
+      />
+    );
+  }
+
+  if (!activity) {
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No se encontró la actividad"
+        description="La actividad indicada no existe o no pertenece a este club."
+      />
+    );
+  }
+
+  if (
+    !activity.active ||
+    !activity.is_published
+  ) {
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="La actividad no está disponible"
+        description="La actividad está desactivada o todavía no fue publicada."
+      />
+    );
   }
 
   const today = new Date()
@@ -80,7 +152,12 @@ export default async function PaymentPage({
     error: feeRateError,
   } = await supabase
     .from("activity_fee_rates")
-    .select("amount")
+    .select(`
+      id,
+      amount,
+      valid_from,
+      valid_to
+    `)
     .eq("activity_id", activity.id)
     .eq("club_id", club.id)
     .eq(
@@ -98,8 +175,17 @@ export default async function PaymentPage({
     .maybeSingle();
 
   if (feeRateError) {
-    throw new Error(
-      `No fue posible consultar el importe: ${feeRateError.message}`,
+    console.error(
+      "Error buscando importe vigente:",
+      feeRateError,
+    );
+
+    return (
+      <PaymentPageError
+        slug={slug}
+        title="No fue posible consultar el importe"
+        description={feeRateError.message}
+      />
     );
   }
 
@@ -151,6 +237,41 @@ export default async function PaymentPage({
             </div>
           )}
         </div>
+      </div>
+    </main>
+  );
+}
+
+type PaymentPageErrorProps = {
+  slug: string;
+  title: string;
+  description: string;
+};
+
+function PaymentPageError({
+  slug,
+  title,
+  description,
+}: PaymentPageErrorProps) {
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-12">
+      <div className="mx-auto max-w-xl">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-900">
+          <h1 className="text-2xl font-bold">
+            {title}
+          </h1>
+
+          <p className="mt-3">
+            {description}
+          </p>
+        </div>
+
+        <Link
+          href={`/clubes/${slug}`}
+          className="mt-6 inline-flex rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700"
+        >
+          Volver al club
+        </Link>
       </div>
     </main>
   );
