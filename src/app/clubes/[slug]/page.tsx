@@ -68,6 +68,9 @@ const dayNames: Record<number, string> = {
   7: "Domingo",
 };
 
+const mercadoPagoLink =
+  "https://mpago.la/REEMPLAZAR-POR-TU-LINK";
+
 function formatTime(value: string) {
   return value.slice(0, 5);
 }
@@ -605,12 +608,14 @@ export default async function ClubPage({
                       </div>
 
                       <div className="mt-6 flex flex-wrap gap-3">
-  <Link
-    href={`/clubes/${club.slug}/pagar?actividad=${activity.id}`}
-    className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
-  >
-    Pagar online
-  </Link>
+  <a
+  href={mercadoPagoLink}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
+>
+  Pagar con Mercado Pago
+</a>
 
   {whatsappPhone ? (
     <a
