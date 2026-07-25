@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+const demoClubSlug = "club-smart";
+
 const features = [
   {
     title: "Página propia del club",
@@ -127,7 +129,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/clubes/club-estrella"
+              href={`/clubes/${demoClubSlug}`}
               className="hidden rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold transition hover:bg-slate-100 sm:inline-flex"
             >
               Ver demo
@@ -167,7 +169,7 @@ export default function HomePage() {
 
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
-                href="/clubes/club-estrella"
+                href={`/clubes/${demoClubSlug}`}
                 className="rounded-lg bg-white px-6 py-3 font-semibold text-slate-900 transition hover:bg-slate-100"
               >
                 Ver club de demostración
@@ -210,7 +212,7 @@ export default function HomePage() {
               <div className="flex items-center justify-between border-b border-slate-200 pb-5">
                 <div>
                   <p className="font-semibold">
-                    Club Social y Deportivo Estrella
+                    Club Social y Deportivo Smart
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     Página pública del club
@@ -241,7 +243,7 @@ export default function HomePage() {
               </div>
 
               <Link
-                href="/clubes/club-estrella"
+                href={`/clubes/${demoClubSlug}`}
                 className="mt-6 inline-flex font-semibold text-blue-700 hover:text-blue-800"
               >
                 Abrir página del club →
@@ -439,7 +441,7 @@ export default function HomePage() {
             </div>
 
             <Link
-              href="/clubes/club-estrella"
+              href={`/clubes/${demoClubSlug}`}
               className="mt-8 inline-flex shrink-0 rounded-lg bg-white px-6 py-3 font-semibold text-slate-900 transition hover:bg-slate-100 lg:mt-0"
             >
               Explorar la demostración

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logout } from "@/app/panel/actions";
+import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +21,16 @@ export default async function PanelLayout({
     redirect("/login");
   }
 
+  const context = await getAdminContext();
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/panel" className="font-bold">
+          <Link
+            href="/panel"
+            className="font-bold"
+          >
             ClubSmart
           </Link>
 
@@ -44,22 +50,23 @@ export default async function PanelLayout({
             </Link>
 
             <Link
-  href="/panel/personas"
-  className="text-sm font-medium text-slate-600 hover:text-blue-700"
->
-  Personas
-</Link>
+              href="/panel/personas"
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+            >
+              Personas
+            </Link>
 
             <Link
-  href="/panel/club"
-  className="text-sm font-medium text-slate-600 hover:text-blue-700"
->
-  Datos del club
-</Link>
+              href="/panel/club"
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+            >
+              Datos del club
+            </Link>
 
             <Link
-              href="/clubes/club-estrella"
+              href={`/clubes/${context.clubSlug}`}
               target="_blank"
+              rel="noopener noreferrer"
               className="text-sm font-medium text-slate-600 hover:text-blue-700"
             >
               Ver página pública
