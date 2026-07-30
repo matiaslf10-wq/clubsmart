@@ -39,23 +39,6 @@ function isValidColor(value: string) {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
-function isValidHttpUrl(value: string) {
-  if (!value) {
-    return true;
-  }
-
-  try {
-    const url = new URL(value);
-
-    return (
-      url.protocol === "https:" ||
-      url.protocol === "http:"
-    );
-  } catch {
-    return false;
-  }
-}
-
 function canManageClub(role: string) {
   return role === "owner" || role === "admin";
 }
@@ -100,11 +83,6 @@ export async function updateClub(
     readText(formData, "whatsapp_phone"),
   );
 
-  const paymentUrl = readText(
-    formData,
-    "payment_url",
-  );
-
   const address = readText(
     formData,
     "address",
@@ -146,14 +124,6 @@ export async function updateClub(
     };
   }
 
-  if (!isValidHttpUrl(paymentUrl)) {
-    return {
-      error:
-        "El enlace de pago no es válido. Debe comenzar con http:// o https://.",
-      success: null,
-    };
-  }
-
   if (
     primaryColor &&
     !isValidColor(primaryColor)
@@ -189,7 +159,6 @@ export async function updateClub(
       phone: phone || null,
       whatsapp_phone:
         whatsappPhone || null,
-      payment_url: paymentUrl || null,
       address: address || null,
       city: city || null,
       province: province || null,

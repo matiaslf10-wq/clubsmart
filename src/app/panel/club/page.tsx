@@ -36,7 +36,6 @@ export default async function ClubSettingsPage() {
         email,
         phone,
         whatsapp_phone,
-        payment_url,
         address,
         city,
         province,
@@ -148,8 +147,6 @@ export default async function ClubSettingsPage() {
             phone: club.phone ?? "",
             whatsappPhone:
               club.whatsapp_phone ?? "",
-            paymentUrl:
-              club.payment_url ?? "",
             address: club.address ?? "",
             city: club.city ?? "",
             province: club.province ?? "",

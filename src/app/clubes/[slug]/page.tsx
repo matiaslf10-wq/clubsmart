@@ -35,7 +35,6 @@ type Activity = {
   enrollment_open: boolean;
   contact_whatsapp: string | null;
   cover_image_url: string | null;
-  payment_url: string | null;
   is_featured: boolean;
   display_order: number;
   activity_schedules: Schedule[];
@@ -57,7 +56,6 @@ type Club = {
   cover_image_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
-  payment_url: string | null;
   activities: Activity[];
 };
 
@@ -96,34 +94,6 @@ function formatLevel(level: string) {
   return labels[level] ?? level;
 }
 
-function getExternalPaymentUrl(
-  value: string | null,
-) {
-  if (!value) {
-    return null;
-  }
-
-  const normalizedValue = value.trim();
-
-  if (!normalizedValue) {
-    return null;
-  }
-
-  try {
-    const url = new URL(normalizedValue);
-
-    if (
-      url.protocol !== "https:" &&
-      url.protocol !== "http:"
-    ) {
-      return null;
-    }
-
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
 
 function buildWhatsAppUrl(
   phone: string,
@@ -160,7 +130,6 @@ async function getClub(slug: string): Promise<Club | null> {
       cover_image_url,
       primary_color,
       secondary_color,
-      payment_url,
       activities (
         id,
         name,
@@ -267,11 +236,6 @@ export default async function ClubPage({
     .filter(Boolean)
     .join(", ");
 
-      const clubPaymentUrl =
-    getExternalPaymentUrl(
-      club.payment_url,
-    );
-
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -353,16 +317,7 @@ export default async function ClubPage({
               >
                 Ver actividades
               </a>
-              {clubPaymentUrl ? (
-  <a
-    href={clubPaymentUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="rounded-lg bg-sky-500 px-5 py-3 font-semibold text-white transition hover:bg-sky-600"
-  >
-    Realizar un pago
-  </a>
-) : null}
+              
 
               {club.whatsapp_phone ? (
                 <a
@@ -476,12 +431,6 @@ export default async function ClubPage({
                 const whatsappPhone =
                   activity.contact_whatsapp ??
                   club.whatsapp_phone;
-
-                  const paymentUrl =
-  getExternalPaymentUrl(
-    activity.payment_url ||
-      club.payment_url,
-  );
 
                 const sortedSchedules = [
                   ...activity.activity_schedules,
@@ -660,17 +609,6 @@ export default async function ClubPage({
                       </div>
 
                       <div className="mt-6 flex flex-wrap gap-3">
-
-                        {paymentUrl ? (
-  <a
-    href={paymentUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
-  >
-    Pagar online
-  </a>
-) : null}
 
   {whatsappPhone ? (
     <a
