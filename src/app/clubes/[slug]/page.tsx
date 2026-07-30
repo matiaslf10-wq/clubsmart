@@ -37,6 +37,7 @@ type Activity = {
   cover_image_url: string | null;
   payment_url: string | null;
   is_featured: boolean;
+  display_order: number;
   activity_schedules: Schedule[];
 };
 
@@ -266,8 +267,10 @@ export default async function ClubPage({
     .filter(Boolean)
     .join(", ");
 
-    const clubPaymentUrl =
-  getExternalPaymentUrl(club.payment_url);
+      const clubPaymentUrl =
+    getExternalPaymentUrl(
+      club.payment_url,
+    );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -476,7 +479,7 @@ export default async function ClubPage({
 
                   const paymentUrl =
   getExternalPaymentUrl(
-    activity.payment_url ??
+    activity.payment_url ||
       club.payment_url,
   );
 
