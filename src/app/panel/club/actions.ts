@@ -10,7 +10,10 @@ export type ClubFormState = {
   success: string | null;
 };
 
-function readText(formData: FormData, field: string) {
+function readText(
+  formData: FormData,
+  field: string,
+) {
   const value = formData.get(field);
 
   return typeof value === "string"
@@ -36,6 +39,23 @@ function isValidColor(value: string) {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
+function isValidHttpUrl(value: string) {
+  if (!value) {
+    return true;
+  }
+
+  try {
+    const url = new URL(value);
+
+    return (
+      url.protocol === "https:" ||
+      url.protocol === "http:"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function canManageClub(role: string) {
   return role === "owner" || role === "admin";
 }
@@ -55,29 +75,56 @@ export async function updateClub(
   }
 
   const name = readText(formData, "name");
+
   const shortDescription = readText(
     formData,
     "short_description",
   );
+
   const description = readText(
     formData,
     "description",
   );
-  const email = readText(formData, "email");
-  const phone = readText(formData, "phone");
+
+  const email = readText(
+    formData,
+    "email",
+  );
+
+  const phone = readText(
+    formData,
+    "phone",
+  );
+
   const whatsappPhone = normalizeWhatsApp(
     readText(formData, "whatsapp_phone"),
   );
-  const address = readText(formData, "address");
-  const city = readText(formData, "city");
+
+  const paymentUrl = readText(
+    formData,
+    "payment_url",
+  );
+
+  const address = readText(
+    formData,
+    "address",
+  );
+
+  const city = readText(
+    formData,
+    "city",
+  );
+
   const province = readText(
     formData,
     "province",
   );
+
   const primaryColor = readText(
     formData,
     "primary_color",
   );
+
   const secondaryColor = readText(
     formData,
     "secondary_color",
@@ -95,6 +142,14 @@ export async function updateClub(
     return {
       error:
         "El correo electrónico ingresado no es válido.",
+      success: null,
+    };
+  }
+
+  if (!isValidHttpUrl(paymentUrl)) {
+    return {
+      error:
+        "El enlace de pago no es válido. Debe comenzar con http:// o https://.",
       success: null,
     };
   }
@@ -134,6 +189,7 @@ export async function updateClub(
       phone: phone || null,
       whatsapp_phone:
         whatsappPhone || null,
+      payment_url: paymentUrl || null,
       address: address || null,
       city: city || null,
       province: province || null,

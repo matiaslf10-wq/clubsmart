@@ -20,6 +20,7 @@ type ClubFormProps = {
     province: string;
     primaryColor: string;
     secondaryColor: string;
+    paymentUrl?: string;
   };
 };
 
@@ -186,6 +187,53 @@ export function ClubForm({
               ejemplo: 5491123456789.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">
+          Pagos online
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-500">
+          Configurá el enlace general de pago que
+          se mostrará en la página pública del
+          club.
+        </p>
+
+        <div className="mt-6">
+          <label
+            htmlFor="payment_url"
+            className="text-sm font-medium text-slate-700"
+          >
+            Enlace general de pago
+          </label>
+
+          <input
+            id="payment_url"
+            name="payment_url"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            maxLength={500}
+            defaultValue={
+              club.paymentUrl ?? ""
+            }
+            className={inputClassName}
+            placeholder="https://mpago.la/..."
+          />
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Puede ser un enlace de Mercado Pago u
+            otra plataforma de pagos. Las
+            actividades que no tengan un enlace
+            propio utilizarán este enlace general.
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Si dejás el campo vacío, no se
+            mostrará el botón general de pago.
+          </p>
         </div>
       </section>
 
