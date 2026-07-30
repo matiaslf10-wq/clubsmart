@@ -38,6 +38,18 @@ function canManageActivities(role: string) {
   return role === "owner" || role === "admin";
 }
 
+function normalizeWhatsApp(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function isValidWhatsApp(value: string) {
+  if (!value) {
+    return true;
+  }
+
+  return /^\d{10,15}$/.test(value);
+}
+
 function readActivityPayload(
   formData: FormData,
 ):
@@ -52,6 +64,14 @@ function readActivityPayload(
   const name = readText(formData, "name");
   const professor = readText(formData, "professor");
   const levelValue = readText(formData, "level");
+
+  const contactWhatsapp =
+  normalizeWhatsApp(
+    readText(
+      formData,
+      "contact_whatsapp",
+    ),
+  );
 
   const ageFrom = readOptionalNumber(
     formData,
@@ -120,6 +140,14 @@ function readActivityPayload(
     };
   }
 
+  if (!isValidWhatsApp(contactWhatsapp)) {
+  return {
+    data: null,
+    error:
+      "El WhatsApp debe contener entre 10 y 15 números, incluyendo el código de país.",
+  };
+}
+
   const scheduleError =
     validateSchedules(schedules);
 
@@ -155,10 +183,7 @@ function readActivityPayload(
         formData,
         "price_description",
       ),
-      contactWhatsapp: readText(
-        formData,
-        "contact_whatsapp",
-      ),
+      contactWhatsapp,
       schedules,
     },
   };
