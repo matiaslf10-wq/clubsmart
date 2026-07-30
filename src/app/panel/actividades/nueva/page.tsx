@@ -34,6 +34,12 @@ export default async function NewActivityPage() {
         <h1 className="mt-3 text-3xl font-bold">
           Nueva actividad
         </h1>
+
+        <p className="mt-3 max-w-2xl text-slate-600">
+          La actividad se publicará
+          automáticamente en la página del club
+          cuando sea creada.
+        </p>
       </div>
 
       <div className="mt-8">
