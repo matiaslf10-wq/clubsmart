@@ -106,11 +106,20 @@ export default async function PaymentConfigurationPage({
     redirect("/panel");
   }
 
+  let configurationsData:
+  | ProviderConfiguration[]
+  | null = null;
+
+let configurationLoadError:
+  | string
+  | null = null;
+
+try {
   const supabase =
     createAdminClient();
 
   const {
-    data: configurationsData,
+    data,
     error,
   } = await supabase
     .from("club_payment_providers")
@@ -133,23 +142,57 @@ export default async function PaymentConfigurationPage({
     .eq("club_id", context.clubId);
 
   if (error) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-8">
-        <h1 className="text-2xl font-bold text-red-900">
-          No fue posible cargar la configuración
-        </h1>
-
-        <p className="mt-3 text-red-800">
-          {error.message}
-        </p>
-      </div>
-    );
+    configurationLoadError =
+      error.message;
+  } else {
+    configurationsData =
+      data as ProviderConfiguration[];
   }
+} catch (error) {
+  console.error(
+    "Error cargando la configuración de pagos:",
+    error,
+  );
+
+  configurationLoadError =
+    error instanceof Error
+      ? error.message
+      : "Ocurrió un error inesperado al conectar con la base de datos.";
+}
+
+  if (configurationLoadError) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-8">
+      <h1 className="text-2xl font-bold text-red-900">
+        No fue posible cargar la configuración
+        de pagos
+      </h1>
+
+      <p className="mt-3 text-red-800">
+        Revisá la conexión administrativa con
+        Supabase y las variables de entorno del
+        servidor.
+      </p>
+
+      {process.env.NODE_ENV ===
+      "development" ? (
+        <pre className="mt-4 overflow-auto rounded-lg bg-red-100 p-4 text-sm text-red-900">
+          {configurationLoadError}
+        </pre>
+      ) : null}
+
+      <Link
+        href="/panel"
+        className="mt-6 inline-flex rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white"
+      >
+        Volver al panel
+      </Link>
+    </div>
+  );
+}
 
   const configurations =
-    (
-      configurationsData ?? []
-    ) as ProviderConfiguration[];
+  configurationsData ?? [];
 
   const configurationByProvider =
     new Map(
