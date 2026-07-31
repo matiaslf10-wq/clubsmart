@@ -270,20 +270,25 @@ export default async function ActivitiesPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/panel/actividades/${activity.id}/editar`}
-                      className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Editar
-                    </Link>
+  <Link
+    href={`/panel/actividades/${activity.id}/editar`}
+    className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+  >
+    Editar
+  </Link>
 
-                    <DeleteActivityButton
-                      activityId={activity.id}
-                      activityName={
-                        activity.name
-                      }
-                    />
-                  </div>
+  <Link
+    href={`/panel/actividades/${activity.id}/tarifas`}
+    className="inline-flex justify-center rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+  >
+    Tarifas
+  </Link>
+
+  <DeleteActivityButton
+    activityId={activity.id}
+    activityName={activity.name}
+  />
+</div>
                 </article>
               );
             })}
