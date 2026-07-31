@@ -1,31 +1,74 @@
 import Link from "next/link";
 
+import { DeleteActivityButton } from "@/app/panel/actividades/delete-activity-button";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
-import { DeleteActivityButton } from "@/app/panel/actividades/delete-activity-button";
 
 export const dynamic = "force-dynamic";
+
+type FeeRate = {
+  id: string;
+  amount: number | string;
+  valid_from: string;
+  valid_to: string | null;
+};
+
+type MemberActivity = {
+  id: string;
+  active: boolean;
+};
 
 type Activity = {
   id: string;
   name: string;
   slug: string;
   category: string | null;
-  target_audience: string | null;
-  price: number | null;
-  price_description: string | null;
-  enrollment_open: boolean;
-  is_published: boolean;
   active: boolean;
   created_at: string;
+  activity_fee_rates: FeeRate[];
+  member_activities: MemberActivity[];
 };
 
-function formatPrice(price: number) {
+function formatPrice(value: number | string) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return "Importe inválido";
+  }
+
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
     maximumFractionDigits: 0,
-  }).format(price);
+  }).format(amount);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("es-AR").format(
+    new Date(`${value}T00:00:00`),
+  );
+}
+
+function getCurrentRate(
+  rates: FeeRate[],
+  today: string,
+) {
+  return (
+    rates
+      .filter(
+        (rate) =>
+          rate.valid_from <= today &&
+          (
+            rate.valid_to === null ||
+            rate.valid_to >= today
+          ),
+      )
+      .sort((first, second) =>
+        second.valid_from.localeCompare(
+          first.valid_from,
+        ),
+      )[0] ?? null
+  );
 }
 
 export default async function ActivitiesPage() {
@@ -39,18 +82,30 @@ export default async function ActivitiesPage() {
       name,
       slug,
       category,
-      target_audience,
-      price,
-      price_description,
-      enrollment_open,
-      is_published,
       active,
-      created_at
+      created_at,
+      activity_fee_rates (
+        id,
+        amount,
+        valid_from,
+        valid_to
+      ),
+      member_activities (
+        id,
+        active
+      )
     `)
-    .eq("organization_id", context.organizationId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
     .eq("club_id", context.clubId)
-    .order("active", { ascending: false })
-    .order("name", { ascending: true });
+    .order("active", {
+      ascending: false,
+    })
+    .order("name", {
+      ascending: true,
+    });
 
   if (error) {
     return (
@@ -66,10 +121,16 @@ export default async function ActivitiesPage() {
     );
   }
 
-  const activities = (data ?? []) as Activity[];
-  const canCreate =
+  const activities =
+    (data ?? []) as Activity[];
+
+  const canManage =
     context.role === "owner" ||
     context.role === "admin";
+
+  const today = new Date()
+    .toISOString()
+    .slice(0, 10);
 
   return (
     <div>
@@ -83,13 +144,13 @@ export default async function ActivitiesPage() {
             Actividades
           </h1>
 
-          <p className="mt-3 text-slate-600">
-            Administrá las propuestas que aparecen en la página
-            pública del club.
+          <p className="mt-3 max-w-2xl text-slate-600">
+            Administrá las actividades, sus
+            participantes y las tarifas vigentes.
           </p>
         </div>
 
-        {canCreate ? (
+        {canManage ? (
           <Link
             href="/panel/actividades/nueva"
             className="inline-flex justify-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
@@ -106,103 +167,126 @@ export default async function ActivitiesPage() {
           </h2>
 
           <p className="mt-3 text-slate-600">
-            Creá la primera actividad para comenzar a completar la
-            página pública.
+            Creá la primera actividad para
+            comenzar a completar la página
+            pública.
           </p>
         </section>
       ) : (
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 ...">
-  <span>Actividad</span>
-  <span>Precio</span>
-  <span>Inscripción</span>
-  <span>Publicación</span>
-  <span />
-</div>
+          <div className="hidden grid-cols-[1.7fr_1.2fr_0.8fr_0.7fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 lg:grid">
+            <span>Actividad</span>
+            <span>Tarifa vigente</span>
+            <span>Inscripciones</span>
+            <span>Estado</span>
+            <span />
+          </div>
 
           <div className="divide-y divide-slate-200">
-            {activities.map((activity) => (
-             <article
-  key={activity.id}
-  className="grid gap-4 px-6 py-5 md:grid-cols-[2fr_1fr_1fr_1fr_auto] md:items-center"
->
-  <div>
-    <p className="font-semibold text-slate-900">
-      {activity.name}
-    </p>
+            {activities.map((activity) => {
+              const currentRate =
+                getCurrentRate(
+                  activity.activity_fee_rates,
+                  today,
+                );
 
-    <p className="mt-1 text-sm text-slate-500">
-      {activity.category || "Sin categoría"}
-    </p>
-  </div>
+              const activeMembersCount =
+                activity.member_activities.filter(
+                  (relation) =>
+                    relation.active,
+                ).length;
 
-  <div>
-    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-      Precio
-    </p>
+              return (
+                <article
+                  key={activity.id}
+                  className="grid gap-4 px-6 py-5 lg:grid-cols-[1.7fr_1.2fr_0.8fr_0.7fr_auto] lg:items-center"
+                >
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {activity.name}
+                    </p>
 
-    <p className="mt-1 text-sm text-slate-700 md:mt-0">
-      {activity.price !== null
-        ? formatPrice(activity.price)
-        : "Sin precio"}
+                    <p className="mt-1 text-sm text-slate-500">
+                      {activity.category ||
+                        "Sin categoría"}
+                    </p>
+                  </div>
 
-      {activity.price_description
-        ? ` · ${activity.price_description}`
-        : ""}
-    </p>
-  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
+                      Tarifa vigente
+                    </p>
 
-  <div>
-    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-      Inscripción
-    </p>
+                    {currentRate ? (
+                      <div className="mt-1 lg:mt-0">
+                        <p className="font-semibold text-slate-900">
+                          {formatPrice(
+                            currentRate.amount,
+                          )}
+                        </p>
 
-    <span
-      className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
-        activity.enrollment_open
-          ? "bg-green-100 text-green-800"
-          : "bg-slate-100 text-slate-600"
-      }`}
-    >
-      {activity.enrollment_open
-        ? "Abierta"
-        : "Cerrada"}
-    </span>
-  </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Desde el{" "}
+                          {formatDate(
+                            currentRate.valid_from,
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-amber-700 lg:mt-0">
+                        Sin tarifa vigente
+                      </p>
+                    )}
+                  </div>
 
-  <div>
-    <p className="text-xs font-semibold uppercase text-slate-400 md:hidden">
-      Publicación
-    </p>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
+                      Inscripciones
+                    </p>
 
-    <span
-      className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold md:mt-0 ${
-        activity.is_published && activity.active
-          ? "bg-blue-100 text-blue-800"
-          : "bg-amber-100 text-amber-800"
-      }`}
-    >
-      {activity.is_published && activity.active
-        ? "Publicada"
-        : "Borrador"}
-    </span>
-  </div>
+                    <p className="mt-1 text-sm text-slate-700 lg:mt-0">
+                      {activeMembersCount === 1
+                        ? "1 persona"
+                        : `${activeMembersCount} personas`}
+                    </p>
+                  </div>
 
-  <div className="flex flex-wrap gap-2">
-  <Link
-    href={`/panel/actividades/${activity.id}/editar`}
-    className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-  >
-    Editar
-  </Link>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
+                      Estado
+                    </p>
 
-  <DeleteActivityButton
-    activityId={activity.id}
-    activityName={activity.name}
-  />
-</div>
-</article>
-            ))}
+                    <span
+                      className={
+                        activity.active
+                          ? "mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 lg:mt-0"
+                          : "mt-1 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 lg:mt-0"
+                      }
+                    >
+                      {activity.active
+                        ? "Activa"
+                        : "Inactiva"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/panel/actividades/${activity.id}/editar`}
+                      className="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Editar
+                    </Link>
+
+                    <DeleteActivityButton
+                      activityId={activity.id}
+                      activityName={
+                        activity.name
+                      }
+                    />
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}

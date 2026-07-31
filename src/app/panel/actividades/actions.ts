@@ -374,6 +374,92 @@ export async function updateActivity(
     };
   }
 
+  const [
+  memberRelationsResult,
+  feeRatesResult,
+  paymentsResult,
+] = await Promise.all([
+  supabase
+    .from("member_activities")
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
+    .eq("activity_id", activityId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId),
+
+  supabase
+    .from("activity_fee_rates")
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
+    .eq("activity_id", activityId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId),
+
+  supabase
+    .from("payments")
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
+    .eq("activity_id", activityId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId),
+]);
+
+if (memberRelationsResult.error) {
+  return {
+    error:
+      `No fue posible verificar las inscripciones: ${memberRelationsResult.error.message}`,
+  };
+}
+
+if (feeRatesResult.error) {
+  return {
+    error:
+      `No fue posible verificar las tarifas: ${feeRatesResult.error.message}`,
+  };
+}
+
+if (paymentsResult.error) {
+  return {
+    error:
+      `No fue posible verificar los pagos: ${paymentsResult.error.message}`,
+  };
+}
+
+const memberRelationsCount =
+  memberRelationsResult.count ?? 0;
+
+const feeRatesCount =
+  feeRatesResult.count ?? 0;
+
+const paymentsCount =
+  paymentsResult.count ?? 0;
+
+if (
+  memberRelationsCount > 0 ||
+  feeRatesCount > 0 ||
+  paymentsCount > 0
+) {
+  return {
+    error:
+      "No se puede eliminar esta actividad porque tiene inscripciones, tarifas o pagos asociados. Más adelante podrás archivarla sin perder el historial.",
+  };
+}
+
   const { error: activityError } =
     await supabase
       .from("activities")
