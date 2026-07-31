@@ -1,6 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import {
+  useActionState,
+  useState,
+} from "react";
 
 import type { MemberFormState } from "@/app/panel/personas/actions";
 
@@ -16,7 +19,14 @@ export type MemberInitialValues = {
   guardianName: string;
   email: string;
   phone: string;
-  activityId: string;
+
+  /*
+   * activityId se conserva temporalmente para que
+   * las páginas actuales sigan compilando.
+   * Lo retiraremos cuando actualicemos la edición.
+   */
+  activityId?: string;
+  activityIds?: string[];
 };
 
 type MemberFormProps = {
@@ -36,7 +46,7 @@ const defaultValues: MemberInitialValues = {
   guardianName: "",
   email: "",
   phone: "",
-  activityId: "",
+  activityIds: [],
 };
 
 const inputClassName =
@@ -52,6 +62,38 @@ export function MemberForm({
     useActionState(action, {
       error: null,
     });
+
+  const initialActivityIds =
+    initialValues.activityIds ??
+    (initialValues.activityId
+      ? [initialValues.activityId]
+      : []);
+
+  const [
+    selectedActivityIds,
+    setSelectedActivityIds,
+  ] = useState<string[]>(
+    initialActivityIds,
+  );
+
+  function toggleActivity(
+    activityId: string,
+    selected: boolean,
+  ) {
+    setSelectedActivityIds((current) => {
+      if (selected) {
+        if (current.includes(activityId)) {
+          return current;
+        }
+
+        return [...current, activityId];
+      }
+
+      return current.filter(
+        (id) => id !== activityId,
+      );
+    });
+  }
 
   return (
     <form
@@ -77,6 +119,7 @@ export function MemberForm({
               name="first_name"
               required
               minLength={2}
+              maxLength={100}
               defaultValue={
                 initialValues.firstName
               }
@@ -97,6 +140,7 @@ export function MemberForm({
               name="last_name"
               required
               minLength={2}
+              maxLength={100}
               defaultValue={
                 initialValues.lastName
               }
@@ -109,18 +153,26 @@ export function MemberForm({
               htmlFor="dni"
               className="text-sm font-medium text-slate-700"
             >
-              DNI
+              DNI *
             </label>
 
             <input
               id="dni"
               name="dni"
+              required
               inputMode="numeric"
               autoComplete="off"
+              minLength={7}
+              maxLength={8}
               defaultValue={initialValues.dni}
               className={inputClassName}
               placeholder="Sin puntos"
             />
+
+            <p className="mt-2 text-sm text-slate-500">
+              Es necesario para identificar a la
+              persona en inscripciones y pagos.
+            </p>
           </div>
 
           <div>
@@ -134,6 +186,7 @@ export function MemberForm({
             <input
               id="guardian_name"
               name="guardian_name"
+              maxLength={200}
               defaultValue={
                 initialValues.guardianName
               }
@@ -163,6 +216,7 @@ export function MemberForm({
               name="email"
               type="email"
               autoComplete="email"
+              maxLength={320}
               defaultValue={
                 initialValues.email
               }
@@ -183,10 +237,12 @@ export function MemberForm({
               name="phone"
               inputMode="tel"
               autoComplete="tel"
+              maxLength={20}
               defaultValue={
                 initialValues.phone
               }
               className={inputClassName}
+              placeholder="5491123456789"
             />
           </div>
         </div>
@@ -194,53 +250,73 @@ export function MemberForm({
 
       <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
         <h2 className="text-xl font-semibold">
-          Actividad
+          Actividades
         </h2>
 
-        <p className="mt-2 text-sm text-slate-500">
-          Seleccioná la actividad en la que participa.
-          El importe se administra por separado según
-          la actividad y el período.
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Seleccioná todas las actividades en las
+          que participa esta persona. Las tarifas
+          se administrarán por separado.
         </p>
 
-        <div className="mt-6">
-          <label
-            htmlFor="activity_id"
-            className="text-sm font-medium text-slate-700"
-          >
-            Actividad *
-          </label>
+        {activities.length === 0 ? (
+          <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Primero tenés que crear al menos una
+            actividad.
+          </p>
+        ) : (
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            {activities.map((activity) => {
+              const selected =
+                selectedActivityIds.includes(
+                  activity.id,
+                );
 
-          <select
-            id="activity_id"
-            name="activity_id"
-            required
-            defaultValue={
-              initialValues.activityId
-            }
-            className={inputClassName}
-          >
-            <option value="">
-              Seleccionar actividad
-            </option>
+              return (
+                <label
+                  key={activity.id}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                    selected
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="activity_ids"
+                    value={activity.id}
+                    checked={selected}
+                    onChange={(event) =>
+                      toggleActivity(
+                        activity.id,
+                        event.target.checked,
+                      )
+                    }
+                    className="mt-1 h-4 w-4"
+                  />
 
-            {activities.map((activity) => (
-              <option
-                key={activity.id}
-                value={activity.id}
-              >
-                {activity.name}
-              </option>
-            ))}
-          </select>
+                  <span className="font-medium text-slate-900">
+                    {activity.name}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
 
-          {activities.length === 0 ? (
-            <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Primero tenés que crear al menos una
-              actividad.
-            </p>
-          ) : null}
-        </div>
+        {activities.length > 0 &&
+        selectedActivityIds.length === 0 ? (
+          <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Seleccioná al menos una actividad.
+          </p>
+        ) : null}
+
+        {selectedActivityIds.length > 0 ? (
+          <p className="mt-4 text-sm text-slate-500">
+            Actividades seleccionadas:{" "}
+            {selectedActivityIds.length}
+          </p>
+        ) : null}
       </section>
 
       {state.error ? (
@@ -257,7 +333,8 @@ export function MemberForm({
           type="submit"
           disabled={
             pending ||
-            activities.length === 0
+            activities.length === 0 ||
+            selectedActivityIds.length === 0
           }
           className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >

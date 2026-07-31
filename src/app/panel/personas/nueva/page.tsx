@@ -20,16 +20,20 @@ export default async function NewMemberPage() {
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("activities")
-    .select("id, name, price")
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq("club_id", context.clubId)
-    .eq("active", true)
-    .order("name");
+  const { data: activities, error } =
+    await supabase
+      .from("activities")
+      .select(`
+        id,
+        name
+      `)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId)
+      .eq("active", true)
+      .order("name");
 
   if (error) {
     throw new Error(
@@ -55,16 +59,16 @@ export default async function NewMemberPage() {
           Nueva persona
         </h1>
 
-        <p className="mt-3 text-slate-600">
-          Cargá sus datos, la actividad y el
-          importe mensual correspondiente.
+        <p className="mt-3 max-w-2xl text-slate-600">
+          Cargá sus datos y seleccioná todas las
+          actividades en las que participa.
         </p>
       </div>
 
       <div className="mt-8">
         <MemberForm
           action={createMember}
-          activities={data ?? []}
+          activities={activities ?? []}
           submitLabel="Crear persona"
         />
       </div>

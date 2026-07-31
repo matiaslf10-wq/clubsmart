@@ -17,8 +17,12 @@ type MemberPayload = {
   guardianName: string;
   email: string;
   phone: string;
-  activityId: string;
+  activityIds: string[];
 };
+
+type SupabaseClient = Awaited<
+  ReturnType<typeof createClient>
+>;
 
 function canManageMembers(role: string) {
   return role === "owner" || role === "admin";
@@ -35,12 +39,27 @@ function readText(
     : "";
 }
 
+function readActivityIds(
+  formData: FormData,
+) {
+  const values = formData
+    .getAll("activity_ids")
+    .filter(
+      (value): value is string =>
+        typeof value === "string",
+    )
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return [...new Set(values)];
+}
+
 function normalizeDni(value: string) {
   return value.replace(/\D/g, "");
 }
 
 function normalizePhone(value: string) {
-  return value.replace(/[^\d+]/g, "");
+  return value.replace(/\D/g, "");
 }
 
 function isValidEmail(value: string) {
@@ -51,6 +70,14 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     value,
   );
+}
+
+function isValidPhone(value: string) {
+  if (!value) {
+    return true;
+  }
+
+  return /^\d{10,15}$/.test(value);
 }
 
 function readMemberPayload(
@@ -92,16 +119,22 @@ function readMemberPayload(
     readText(formData, "phone"),
   );
 
-  const activityId = readText(
-    formData,
-    "activity_id",
-  );
+  const activityIds =
+    readActivityIds(formData);
 
   if (firstName.length < 2) {
     return {
       data: null,
       error:
         "El nombre debe tener al menos dos caracteres.",
+    };
+  }
+
+  if (firstName.length > 100) {
+    return {
+      data: null,
+      error:
+        "El nombre no puede superar los 100 caracteres.",
     };
   }
 
@@ -113,11 +146,27 @@ function readMemberPayload(
     };
   }
 
-  if (dni && dni.length < 7) {
+  if (lastName.length > 100) {
     return {
       data: null,
       error:
-        "El DNI ingresado parece incompleto.",
+        "El apellido no puede superar los 100 caracteres.",
+    };
+  }
+
+  if (!/^\d{7,8}$/.test(dni)) {
+    return {
+      data: null,
+      error:
+        "Ingresá un DNI válido de 7 u 8 números, sin puntos.",
+    };
+  }
+
+  if (guardianName.length > 200) {
+    return {
+      data: null,
+      error:
+        "El nombre del responsable no puede superar los 200 caracteres.",
     };
   }
 
@@ -129,10 +178,19 @@ function readMemberPayload(
     };
   }
 
-  if (!activityId) {
+  if (!isValidPhone(phone)) {
     return {
       data: null,
-      error: "Seleccioná una actividad.",
+      error:
+        "El teléfono debe contener entre 10 y 15 números, incluyendo el código de país.",
+    };
+  }
+
+  if (activityIds.length === 0) {
+    return {
+      data: null,
+      error:
+        "Seleccioná al menos una actividad.",
     };
   }
 
@@ -145,13 +203,13 @@ function readMemberPayload(
       guardianName,
       email,
       phone,
-      activityId,
+      activityIds,
     },
   };
 }
 
-async function activityBelongsToClub(
-  activityId: string,
+async function activitiesBelongToClub(
+  activityIds: string[],
   organizationId: string,
   clubId: string,
 ) {
@@ -160,16 +218,183 @@ async function activityBelongsToClub(
   const { data, error } = await supabase
     .from("activities")
     .select("id")
-    .eq("id", activityId)
+    .in("id", activityIds)
     .eq("organization_id", organizationId)
     .eq("club_id", clubId)
-    .eq("active", true)
-    .maybeSingle();
+    .eq("active", true);
 
   return {
-    valid: !error && Boolean(data),
+    valid:
+      !error &&
+      (data?.length ?? 0) ===
+        activityIds.length,
     error,
   };
+}
+
+async function syncMemberActivities(
+  supabase: SupabaseClient,
+  memberId: string,
+  activityIds: string[],
+  organizationId: string,
+  clubId: string,
+): Promise<string | null> {
+  const today = new Date()
+    .toISOString()
+    .slice(0, 10);
+
+  const { data: relations, error } =
+    await supabase
+      .from("member_activities")
+      .select(`
+        id,
+        activity_id,
+        active
+      `)
+      .eq("member_id", memberId)
+      .eq("organization_id", organizationId)
+      .eq("club_id", clubId);
+
+  if (error) {
+    return `No fue posible consultar las actividades actuales: ${error.message}`;
+  }
+
+  const existingRelations = relations ?? [];
+
+  const desiredActivityIds =
+    new Set(activityIds);
+
+  const activeRelations =
+    existingRelations.filter(
+      (relation) => relation.active,
+    );
+
+  const activeActivityIds = new Set(
+    activeRelations.map(
+      (relation) => relation.activity_id,
+    ),
+  );
+
+  const relationsToClose =
+    activeRelations.filter(
+      (relation) =>
+        !desiredActivityIds.has(
+          relation.activity_id,
+        ),
+    );
+
+  if (relationsToClose.length > 0) {
+    const { error: closeError } =
+      await supabase
+        .from("member_activities")
+        .update({
+          active: false,
+          end_date: today,
+        })
+        .in(
+          "id",
+          relationsToClose.map(
+            (relation) => relation.id,
+          ),
+        )
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq("club_id", clubId);
+
+    if (closeError) {
+      return `No fue posible cerrar las inscripciones retiradas: ${closeError.message}`;
+    }
+  }
+
+  const inactiveRelationByActivity =
+    new Map<string, string>();
+
+  for (const relation of existingRelations) {
+    if (
+      !relation.active &&
+      !inactiveRelationByActivity.has(
+        relation.activity_id,
+      )
+    ) {
+      inactiveRelationByActivity.set(
+        relation.activity_id,
+        relation.id,
+      );
+    }
+  }
+
+  const relationsToReactivate: string[] =
+    [];
+
+  const activitiesToInsert: string[] = [];
+
+  for (const activityId of activityIds) {
+    if (activeActivityIds.has(activityId)) {
+      continue;
+    }
+
+    const inactiveRelationId =
+      inactiveRelationByActivity.get(
+        activityId,
+      );
+
+    if (inactiveRelationId) {
+      relationsToReactivate.push(
+        inactiveRelationId,
+      );
+    } else {
+      activitiesToInsert.push(activityId);
+    }
+  }
+
+  if (relationsToReactivate.length > 0) {
+    const { error: reactivateError } =
+      await supabase
+        .from("member_activities")
+        .update({
+          active: true,
+          start_date: today,
+          end_date: null,
+        })
+        .in("id", relationsToReactivate)
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq("club_id", clubId);
+
+    if (reactivateError) {
+      return `No fue posible reactivar las inscripciones seleccionadas: ${reactivateError.message}`;
+    }
+  }
+
+  if (activitiesToInsert.length > 0) {
+    const { error: insertError } =
+      await supabase
+        .from("member_activities")
+        .insert(
+          activitiesToInsert.map(
+            (activityId) => ({
+              organization_id:
+                organizationId,
+              club_id: clubId,
+              member_id: memberId,
+              activity_id: activityId,
+              active: true,
+              start_date: today,
+              end_date: null,
+            }),
+          ),
+        );
+
+    if (insertError) {
+      return `No fue posible guardar las nuevas inscripciones: ${insertError.message}`;
+    }
+  }
+
+  return null;
 }
 
 export async function createMember(
@@ -185,7 +410,8 @@ export async function createMember(
     };
   }
 
-  const parsed = readMemberPayload(formData);
+  const parsed =
+    readMemberPayload(formData);
 
   if (parsed.error || !parsed.data) {
     return {
@@ -196,36 +422,53 @@ export async function createMember(
   const payload = parsed.data;
 
   const activityCheck =
-    await activityBelongsToClub(
-      payload.activityId,
+    await activitiesBelongToClub(
+      payload.activityIds,
       context.organizationId,
       context.clubId,
     );
 
   if (!activityCheck.valid) {
+    console.error(
+      "Error validando actividades:",
+      activityCheck.error,
+    );
+
     return {
       error:
-        "La actividad seleccionada no pertenece al club.",
+        "Una o más actividades seleccionadas no pertenecen al club.",
     };
   }
 
   const supabase = await createClient();
 
-  if (payload.dni) {
-    const { data: existingMember } =
-      await supabase
-        .from("members")
-        .select("id, first_name, last_name")
-        .eq("club_id", context.clubId)
-        .eq("dni", payload.dni)
-        .maybeSingle();
+  const {
+    data: existingMember,
+    error: existingMemberError,
+  } = await supabase
+    .from("members")
+    .select(
+      "id, first_name, last_name",
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .eq("dni", payload.dni)
+    .maybeSingle();
 
-    if (existingMember) {
-      return {
-        error:
-          `Ya existe una persona con ese DNI: ${existingMember.first_name} ${existingMember.last_name}.`,
-      };
-    }
+  if (existingMemberError) {
+    return {
+      error: `No fue posible verificar el DNI: ${existingMemberError.message}`,
+    };
+  }
+
+  if (existingMember) {
+    return {
+      error:
+        `Ya existe una persona con ese DNI: ${existingMember.first_name} ${existingMember.last_name}.`,
+    };
   }
 
   const {
@@ -239,7 +482,7 @@ export async function createMember(
       club_id: context.clubId,
       first_name: payload.firstName,
       last_name: payload.lastName,
-      dni: payload.dni || null,
+      dni: payload.dni,
       guardian_name:
         payload.guardianName || null,
       email: payload.email || null,
@@ -263,18 +506,22 @@ export async function createMember(
   const { error: relationError } =
     await supabase
       .from("member_activities")
-      .insert({
-        organization_id:
-          context.organizationId,
-        club_id: context.clubId,
-        member_id: member.id,
-        activity_id: payload.activityId,
-        active: true,
-        start_date: new Date()
-          .toISOString()
-          .slice(0, 10),
-        end_date: null,
-      });
+      .insert(
+        payload.activityIds.map(
+          (activityId) => ({
+            organization_id:
+              context.organizationId,
+            club_id: context.clubId,
+            member_id: member.id,
+            activity_id: activityId,
+            active: true,
+            start_date: new Date()
+              .toISOString()
+              .slice(0, 10),
+            end_date: null,
+          }),
+        ),
+      );
 
   if (relationError) {
     await supabase
@@ -284,14 +531,15 @@ export async function createMember(
       .eq(
         "organization_id",
         context.organizationId,
-      );
+      )
+      .eq("club_id", context.clubId);
 
     return {
-      error: `No fue posible asignar la actividad: ${relationError.message}`,
+      error: `No fue posible asignar las actividades: ${relationError.message}`,
     };
   }
 
-  revalidatePath("/panel/personas");
+  revalidateMemberPages();
 
   redirect("/panel/personas");
 }
@@ -310,7 +558,8 @@ export async function updateMember(
     };
   }
 
-  const parsed = readMemberPayload(formData);
+  const parsed =
+    readMemberPayload(formData);
 
   if (parsed.error || !parsed.data) {
     return {
@@ -321,32 +570,45 @@ export async function updateMember(
   const payload = parsed.data;
 
   const activityCheck =
-    await activityBelongsToClub(
-      payload.activityId,
+    await activitiesBelongToClub(
+      payload.activityIds,
       context.organizationId,
       context.clubId,
     );
 
   if (!activityCheck.valid) {
+    console.error(
+      "Error validando actividades:",
+      activityCheck.error,
+    );
+
     return {
       error:
-        "La actividad seleccionada no pertenece al club.",
+        "Una o más actividades seleccionadas no pertenecen al club.",
     };
   }
 
   const supabase = await createClient();
 
-  const { data: existingMember } =
-    await supabase
-      .from("members")
-      .select("id")
-      .eq("id", memberId)
-      .eq(
-        "organization_id",
-        context.organizationId,
-      )
-      .eq("club_id", context.clubId)
-      .maybeSingle();
+  const {
+    data: existingMember,
+    error: existingMemberError,
+  } = await supabase
+    .from("members")
+    .select("id")
+    .eq("id", memberId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .maybeSingle();
+
+  if (existingMemberError) {
+    return {
+      error: `No fue posible consultar la persona: ${existingMemberError.message}`,
+    };
+  }
 
   if (!existingMember) {
     return {
@@ -355,22 +617,32 @@ export async function updateMember(
     };
   }
 
-  if (payload.dni) {
-    const { data: duplicatedMember } =
-      await supabase
-        .from("members")
-        .select("id")
-        .eq("club_id", context.clubId)
-        .eq("dni", payload.dni)
-        .neq("id", memberId)
-        .maybeSingle();
+  const {
+    data: duplicatedMember,
+    error: duplicatedMemberError,
+  } = await supabase
+    .from("members")
+    .select("id")
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId)
+    .eq("dni", payload.dni)
+    .neq("id", memberId)
+    .maybeSingle();
 
-    if (duplicatedMember) {
-      return {
-        error:
-          "Ya existe otra persona con ese DNI.",
-      };
-    }
+  if (duplicatedMemberError) {
+    return {
+      error: `No fue posible verificar el DNI: ${duplicatedMemberError.message}`,
+    };
+  }
+
+  if (duplicatedMember) {
+    return {
+      error:
+        "Ya existe otra persona con ese DNI.",
+    };
   }
 
   const { error: memberError } =
@@ -379,7 +651,7 @@ export async function updateMember(
       .update({
         first_name: payload.firstName,
         last_name: payload.lastName,
-        dni: payload.dni || null,
+        dni: payload.dni,
         guardian_name:
           payload.guardianName || null,
         email: payload.email || null,
@@ -398,87 +670,23 @@ export async function updateMember(
     };
   }
 
-  const { data: currentRelation } =
-    await supabase
-      .from("member_activities")
-      .select("id, activity_id")
-      .eq("member_id", memberId)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle();
+  const relationError =
+    await syncMemberActivities(
+      supabase,
+      memberId,
+      payload.activityIds,
+      context.organizationId,
+      context.clubId,
+    );
 
-  if (
-    currentRelation &&
-    currentRelation.activity_id ===
-      payload.activityId
-  ) {
-    const { error: relationUpdateError } =
-      await supabase
-        .from("member_activities")
-        .update({
-        })
-        .eq("id", currentRelation.id)
-        .eq(
-          "organization_id",
-          context.organizationId,
-        );
-
-    if (relationUpdateError) {
-      return {
-        error: `La persona se actualizó, pero no fue posible actualizar el importe: ${relationUpdateError.message}`,
-      };
-    }
-  } else {
-    if (currentRelation) {
-      const { error: endRelationError } =
-        await supabase
-          .from("member_activities")
-          .update({
-            active: false,
-            end_date: new Date()
-              .toISOString()
-              .slice(0, 10),
-          })
-          .eq("id", currentRelation.id)
-          .eq(
-            "organization_id",
-            context.organizationId,
-          );
-
-      if (endRelationError) {
-        return {
-          error: `No fue posible cerrar la actividad anterior: ${endRelationError.message}`,
-        };
-      }
-    }
-
-    const { error: newRelationError } =
-      await supabase
-        .from("member_activities")
-        .insert({
-          organization_id:
-            context.organizationId,
-          club_id: context.clubId,
-          member_id: memberId,
-          activity_id: payload.activityId,
-          active: true,
-          start_date: new Date()
-            .toISOString()
-            .slice(0, 10),
-          end_date: null,
-        });
-
-    if (newRelationError) {
-      return {
-        error: `No fue posible asignar la nueva actividad: ${newRelationError.message}`,
-      };
-    }
+  if (relationError) {
+    return {
+      error:
+        `Los datos personales se actualizaron, pero ocurrió un problema con las actividades. ${relationError}`,
+    };
   }
 
-  revalidatePath("/panel/personas");
-  revalidatePath(
-    `/panel/personas/${memberId}/editar`,
-  );
+  revalidateMemberPages(memberId);
 
   redirect("/panel/personas");
 }
@@ -499,7 +707,10 @@ export async function deactivateMember(
 
   const supabase = await createClient();
 
-  const { data: member } = await supabase
+  const {
+    data: member,
+    error: memberReadError,
+  } = await supabase
     .from("members")
     .select("id")
     .eq("id", memberId)
@@ -509,6 +720,12 @@ export async function deactivateMember(
     )
     .eq("club_id", context.clubId)
     .maybeSingle();
+
+  if (memberReadError) {
+    return {
+      error: `No fue posible consultar la persona: ${memberReadError.message}`,
+    };
+  }
 
   if (!member) {
     return {
@@ -526,13 +743,15 @@ export async function deactivateMember(
       .from("members")
       .update({
         active: false,
-        inactive_at: new Date().toISOString(),
+        inactive_at:
+          new Date().toISOString(),
       })
       .eq("id", memberId)
       .eq(
         "organization_id",
         context.organizationId,
-      );
+      )
+      .eq("club_id", context.clubId);
 
   if (memberError) {
     return {
@@ -552,16 +771,17 @@ export async function deactivateMember(
       .eq(
         "organization_id",
         context.organizationId,
-      );
+      )
+      .eq("club_id", context.clubId);
 
   if (relationError) {
     return {
       error:
-        `La persona fue dada de baja, pero no fue posible cerrar su actividad: ${relationError.message}`,
+        `La persona fue dada de baja, pero no fue posible cerrar sus actividades: ${relationError.message}`,
     };
   }
 
-  revalidatePath("/panel/personas");
+  revalidateMemberPages(memberId);
 
   return {
     error: null,
@@ -604,9 +824,22 @@ export async function reactivateMember(
     };
   }
 
-  revalidatePath("/panel/personas");
+  revalidateMemberPages(memberId);
 
   return {
     error: null,
   };
+}
+
+function revalidateMemberPages(
+  memberId?: string,
+) {
+  revalidatePath("/panel");
+  revalidatePath("/panel/personas");
+
+  if (memberId) {
+    revalidatePath(
+      `/panel/personas/${memberId}/editar`,
+    );
+  }
 }

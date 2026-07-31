@@ -75,7 +75,10 @@ export default async function EditMemberPage({
     error: activitiesError,
   } = await supabase
     .from("activities")
-    .select("id, name")
+    .select(`
+      id,
+      name
+    `)
     .eq(
       "organization_id",
       context.organizationId,
@@ -90,10 +93,15 @@ export default async function EditMemberPage({
     );
   }
 
-  const activeRelation =
-    member.member_activities.find(
-      (relation) => relation.active,
-    );
+  const activeActivityIds =
+    member.member_activities
+      .filter(
+        (relation) => relation.active,
+      )
+      .map(
+        (relation) =>
+          relation.activity_id,
+      );
 
   const updateAction =
     updateMember.bind(null, id);
@@ -120,37 +128,43 @@ export default async function EditMemberPage({
           {member.first_name}{" "}
           {member.last_name}
         </p>
+      </div>
 
-        {!member.active ? (
-          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Esta persona está dada de baja. Para
-            asignarle nuevamente una actividad,
-            primero reactivala desde el listado.
+      {!member.active ? (
+        <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-800">
+          <p className="font-semibold">
+            Esta persona está dada de baja.
           </p>
-        ) : null}
-      </div>
 
-      <div className="mt-8">
-        <MemberForm
-          action={updateAction}
-          activities={activities ?? []}
-          submitLabel="Guardar cambios"
-          initialValues={{
-            firstName:
-              member.first_name,
-            lastName:
-              member.last_name,
-            dni: member.dni ?? "",
-            guardianName:
-              member.guardian_name ?? "",
-            email: member.email ?? "",
-            phone: member.phone ?? "",
-            activityId:
-              activeRelation?.activity_id ??
-              "",
-          }}
-        />
-      </div>
+          <p className="mt-1">
+            Para modificar sus datos o volver a
+            asignarle actividades, primero
+            reactivala desde el listado de
+            personas.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8">
+          <MemberForm
+            action={updateAction}
+            activities={activities ?? []}
+            submitLabel="Guardar cambios"
+            initialValues={{
+              firstName:
+                member.first_name,
+              lastName:
+                member.last_name,
+              dni: member.dni ?? "",
+              guardianName:
+                member.guardian_name ?? "",
+              email: member.email ?? "",
+              phone: member.phone ?? "",
+              activityIds:
+                activeActivityIds,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
