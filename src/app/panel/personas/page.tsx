@@ -13,8 +13,6 @@ type PageProps = {
   searchParams: SearchParams;
 };
 
-export const dynamic = "force-dynamic";
-
 function formatDni(value: string | null) {
   if (!value) {
     return "Sin DNI";
@@ -37,6 +35,8 @@ function sanitizeSearch(value: string) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+export const dynamic = "force-dynamic";
 
 export default async function MembersPage({
   searchParams,
@@ -139,8 +139,9 @@ export default async function MembersPage({
           </h1>
 
           <p className="mt-3 text-slate-600">
-            Administrá jugadores, participantes
-            y sus actividades.
+            Administrá jugadores, participantes y
+            las actividades en las que están
+            inscriptos.
           </p>
         </div>
 
@@ -155,7 +156,7 @@ export default async function MembersPage({
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">
-            Mostradas
+            Resultados
           </p>
 
           <p className="mt-2 text-3xl font-bold">
@@ -165,7 +166,7 @@ export default async function MembersPage({
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">
-            Activas
+            Activas en resultados
           </p>
 
           <p className="mt-2 text-3xl font-bold text-green-700">
@@ -175,7 +176,7 @@ export default async function MembersPage({
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">
-            Inactivas
+            Inactivas en resultados
           </p>
 
           <p className="mt-2 text-3xl font-bold text-slate-500">
@@ -243,6 +244,17 @@ export default async function MembersPage({
             </button>
           </div>
         </form>
+
+        {search || status !== "activos" ? (
+          <div className="mt-4">
+            <Link
+              href="/panel/personas"
+              className="text-sm font-semibold text-blue-700 hover:text-blue-800"
+            >
+              Limpiar filtros
+            </Link>
+          </div>
+        ) : null}
       </section>
 
       {members.length === 0 ? (
@@ -258,30 +270,49 @@ export default async function MembersPage({
         </section>
       ) : (
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[1.5fr_1fr_1.2fr_0.8fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 lg:grid">
+          <div className="hidden grid-cols-[1.4fr_0.8fr_1.6fr_0.7fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 text-sm font-semibold text-slate-600 lg:grid">
             <span>Persona</span>
             <span>DNI</span>
-            <span>Actividad</span>
+            <span>Actividades</span>
             <span>Estado</span>
             <span />
           </div>
 
           <div className="divide-y divide-slate-200">
             {members.map((member) => {
-              const activeRelation =
-                member.member_activities.find(
-                  (relation) =>
-                    relation.active,
+              const relatedActivities =
+                member.member_activities
+                  .filter(
+                    (relation) =>
+                      relation.active,
+                  )
+                  .flatMap((relation) => {
+                    const value =
+                      relation.activities;
+
+                    if (Array.isArray(value)) {
+                      return value;
+                    }
+
+                    return value ? [value] : [];
+                  });
+
+              const activeActivities =
+                Array.from(
+                  new Map(
+                    relatedActivities.map(
+                      (activity) => [
+                        activity.id,
+                        activity,
+                      ],
+                    ),
+                  ).values(),
+                ).sort((first, second) =>
+                  first.name.localeCompare(
+                    second.name,
+                    "es",
+                  ),
                 );
-
-              const activityValue =
-                activeRelation?.activities;
-
-              const activity = Array.isArray(
-                activityValue,
-              )
-                ? activityValue[0]
-                : activityValue;
 
               const memberName =
                 `${member.first_name} ${member.last_name}`;
@@ -289,7 +320,7 @@ export default async function MembersPage({
               return (
                 <article
                   key={member.id}
-                  className="grid gap-4 px-6 py-5 lg:grid-cols-[1.5fr_1fr_1.2fr_0.8fr_auto] lg:items-center"
+                  className="grid gap-4 px-6 py-5 lg:grid-cols-[1.4fr_0.8fr_1.6fr_0.7fr_auto] lg:items-center"
                 >
                   <div>
                     <p className="font-semibold text-slate-900">
@@ -317,15 +348,30 @@ export default async function MembersPage({
 
                   <div>
                     <p className="text-xs font-semibold uppercase text-slate-400 lg:hidden">
-                      Actividad
+                      Actividades
                     </p>
 
-                    <p className="mt-1 text-sm lg:mt-0">
-                      {activity?.name ??
-                        (member.active
-                          ? "Sin actividad"
-                          : "Actividad finalizada")}
-                    </p>
+                    {activeActivities.length >
+                    0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2 lg:mt-0">
+                        {activeActivities.map(
+                          (activity) => (
+                            <span
+                              key={activity.id}
+                              className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                            >
+                              {activity.name}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-500 lg:mt-0">
+                        {member.active
+                          ? "Sin actividades activas"
+                          : "Inscripciones finalizadas"}
+                      </p>
+                    )}
                   </div>
 
                   <div>

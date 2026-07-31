@@ -28,14 +28,16 @@ export function MemberStatusButton({
     useTransition();
 
   function changeStatus() {
-    if (active) {
-      const confirmed = window.confirm(
-        `¿Querés dar de baja a ${memberName}?\n\nSe conservarán sus datos, cuotas y pagos anteriores.`,
-      );
+    const confirmationMessage = active
+      ? `¿Querés dar de baja a ${memberName}?\n\nSe conservarán sus datos y su historial, pero se cerrarán todas sus inscripciones activas.`
+      : `¿Querés reactivar a ${memberName}?\n\nLa persona volverá a estar activa, pero sus actividades anteriores no se reabrirán automáticamente. Después podrás asignarlas desde Editar.`;
 
-      if (!confirmed) {
-        return;
-      }
+    const confirmed = window.confirm(
+      confirmationMessage,
+    );
+
+    if (!confirmed) {
+      return;
     }
 
     setError(null);
@@ -59,8 +61,8 @@ export function MemberStatusButton({
         onClick={changeStatus}
         className={
           active
-            ? "rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-            : "rounded-lg border border-green-200 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50 disabled:opacity-50"
+            ? "rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            : "rounded-lg border border-green-200 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
         }
       >
         {pending
