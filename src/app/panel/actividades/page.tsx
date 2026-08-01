@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { DeleteActivityButton } from "@/app/panel/actividades/delete-activity-button";
 import { getAdminContext } from "@/lib/auth/admin-context";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +73,7 @@ function getCurrentRate(
 
 export default async function ActivitiesPage() {
   const context = await getAdminContext();
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("activities")
