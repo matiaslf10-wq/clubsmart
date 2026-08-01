@@ -247,16 +247,20 @@ export default async function PanelPage() {
           />
 
           <SummaryCard
-            title="Cuotas pendientes"
-            value={outstandingFees}
-            description="Incluye cuotas pendientes, parciales y vencidas."
-          />
+  title="Cuotas pendientes"
+  value={outstandingFees}
+  description="Incluye cuotas pendientes, parciales y vencidas."
+  href="/panel/cuotas"
+  linkLabel="Ver cuotas"
+/>
 
           <SummaryCard
-            title="Pagos aprobados"
-            value={approvedPayments}
-            description="Pagos confirmados y registrados en ClubSmart."
-          />
+  title="Pagos aprobados"
+  value={approvedPayments}
+  description="Pagos confirmados y registrados en ClubSmart."
+  href="/panel/pagos"
+  linkLabel="Ver pagos"
+/>
         </div>
       </section>
 
