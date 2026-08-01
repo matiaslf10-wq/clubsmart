@@ -16,19 +16,12 @@ type ProviderMode =
 
 type ProviderConfiguration = {
   id: string;
-  organization_id: string;
-  club_id: string;
   provider: PaymentProvider;
   enabled: boolean;
-  mode: ProviderMode;
   monthly_fees_enabled: boolean;
   one_time_enabled: boolean;
   automatic_debit_enabled: boolean;
-  default_for_monthly_fees: boolean;
-  default_for_one_time: boolean;
   merchant_account_id: string | null;
-  public_settings: unknown;
-  secret_reference: string | null;
 };
 
 const validProviders =
@@ -81,6 +74,39 @@ function providerName(
     : "Mercado Pago";
 }
 
+function hasUsableEnvironmentValue(
+  variableName: string,
+) {
+  const value =
+    process.env[variableName]?.trim();
+
+  if (!value) {
+    return false;
+  }
+
+  const normalized =
+    value.toUpperCase();
+
+  return !(
+    normalized.startsWith("TU_") ||
+    normalized.startsWith("PEGAR_") ||
+    normalized.startsWith("YOUR_") ||
+    normalized.includes("CHANGE_ME") ||
+    normalized.includes("REEMPLAZAR")
+  );
+}
+
+function hasPagoTicPlatformCredentials() {
+  return [
+    "PAGOTIC_USERNAME",
+    "PAGOTIC_PASSWORD",
+    "PAGOTIC_CLIENT_ID",
+    "PAGOTIC_CLIENT_SECRET",
+  ].every(
+    hasUsableEnvironmentValue,
+  );
+}
+
 export async function updatePaymentProvider(
   provider: PaymentProvider,
   formData: FormData,
@@ -121,31 +147,87 @@ export async function updatePaymentProvider(
     "enabled",
   );
 
-  const monthlyFeesEnabled =
+  let monthlyFeesEnabled =
     readBoolean(
       formData,
       "monthly_fees_enabled",
     );
 
-  const oneTimeEnabled =
+  let oneTimeEnabled =
     readBoolean(
       formData,
       "one_time_enabled",
     );
 
-  const automaticDebitEnabled =
-    provider === "pagotic"
-      ? readBoolean(
-          formData,
-          "automatic_debit_enabled",
-        )
-      : false;
+  let automaticDebitEnabled =
+    readBoolean(
+      formData,
+      "automatic_debit_enabled",
+    );
 
   const merchantAccountId =
     readText(
       formData,
       "merchant_account_id",
     ) || null;
+
+  /*
+   * Mercado Pago queda postergado hasta que
+   * implementemos OAuth por club. Nunca debe
+   * utilizarse un access token global para
+   * cobrar operaciones de clubes diferentes.
+   */
+  if (
+    provider === "mercado_pago"
+  ) {
+    if (
+      enabled ||
+      monthlyFeesEnabled ||
+      oneTimeEnabled ||
+      automaticDebitEnabled
+    ) {
+      redirectWithMessage(
+        "error",
+        "Mercado Pago permanecerá deshabilitado hasta implementar la conexión individual de cada club.",
+      );
+    }
+
+    monthlyFeesEnabled = false;
+    oneTimeEnabled = false;
+    automaticDebitEnabled = false;
+  }
+
+  if (provider === "pagotic") {
+    if (
+      automaticDebitEnabled &&
+      !monthlyFeesEnabled
+    ) {
+      redirectWithMessage(
+        "error",
+        "Para habilitar el débito automático también deben estar habilitadas las cuotas mensuales.",
+      );
+    }
+
+    if (
+      enabled &&
+      !merchantAccountId
+    ) {
+      redirectWithMessage(
+        "error",
+        "Ingresá el Collector ID asignado por Pago TIC al club.",
+      );
+    }
+
+    if (
+      enabled &&
+      !hasPagoTicPlatformCredentials()
+    ) {
+      redirectWithMessage(
+        "error",
+        "La integración general de ClubSmart con Pago TIC todavía no tiene credenciales válidas en el servidor.",
+      );
+    }
+  }
 
   const supabase =
     createAdminClient();
@@ -175,11 +257,6 @@ export async function updatePaymentProvider(
     );
   }
 
-  /*
-   * Si se deshabilita el proveedor o una de
-   * sus funciones, también deja de ser el
-   * proveedor predeterminado para esa función.
-   */
   const defaultForMonthlyFees =
     enabled && monthlyFeesEnabled
       ? (
@@ -226,6 +303,11 @@ export async function updatePaymentProvider(
           default_for_one_time:
             defaultForOneTime,
 
+          /*
+           * Para Pago TIC representa el
+           * Collector ID propio del club.
+           * Nunca contiene contraseñas.
+           */
           merchant_account_id:
             merchantAccountId,
 
@@ -295,11 +377,11 @@ export async function updateDefaultProviders(
 
   if (
     monthlyProvider !== null &&
-    !validProviders.has(monthlyProvider)
+    monthlyProvider !== "pagotic"
   ) {
     redirectWithMessage(
       "error",
-      "El proveedor seleccionado para mensualidades no es válido.",
+      "Pago TIC es el único proveedor habilitado actualmente para mensualidades.",
     );
   }
 
@@ -313,6 +395,16 @@ export async function updateDefaultProviders(
     );
   }
 
+  if (
+    oneTimeProvider ===
+    "mercado_pago"
+  ) {
+    redirectWithMessage(
+      "error",
+      "Mercado Pago todavía no puede seleccionarse porque falta implementar la conexión individual por club.",
+    );
+  }
+
   const supabase =
     createAdminClient();
 
@@ -323,19 +415,12 @@ export async function updateDefaultProviders(
     .from("club_payment_providers")
     .select(`
       id,
-      organization_id,
-      club_id,
       provider,
       enabled,
-      mode,
       monthly_fees_enabled,
       one_time_enabled,
       automatic_debit_enabled,
-      default_for_monthly_fees,
-      default_for_one_time,
-      merchant_account_id,
-      public_settings,
-      secret_reference
+      merchant_account_id
     `)
     .eq(
       "organization_id",
@@ -375,11 +460,15 @@ export async function updateDefaultProviders(
       !configuration ||
       !configuration.enabled ||
       !configuration
-        .monthly_fees_enabled
+        .monthly_fees_enabled ||
+      !configuration
+        .automatic_debit_enabled ||
+      !configuration
+        .merchant_account_id
     ) {
       redirectWithMessage(
         "error",
-        "El proveedor elegido para mensualidades debe estar habilitado y aceptar cuotas mensuales.",
+        "Pago TIC debe estar habilitado, vinculado al club y configurado para cuotas y débito automático.",
       );
     }
   }
@@ -397,82 +486,102 @@ export async function updateDefaultProviders(
     ) {
       redirectWithMessage(
         "error",
-        "El proveedor elegido para pagos puntuales debe estar habilitado y aceptar pagos únicos.",
+        "El proveedor de pagos puntuales debe estar habilitado y aceptar pagos únicos.",
       );
     }
   }
 
   /*
-   * Actualizamos todas las filas juntas para
-   * respetar los índices únicos que permiten
-   * un solo proveedor predeterminado.
+   * Primero quitamos los predeterminados.
+   * Luego marcamos las filas seleccionadas.
+   * Así evitamos conflictos con los índices
+   * únicos de la base.
    */
-  const updatedConfigurations =
-    configurations.map(
-      (configuration) => ({
-        id: configuration.id,
+  const {
+    error: clearDefaultsError,
+  } = await supabase
+    .from("club_payment_providers")
+    .update({
+      default_for_monthly_fees:
+        false,
 
-        organization_id:
-          configuration.organization_id,
+      default_for_one_time:
+        false,
 
-        club_id:
-          configuration.club_id,
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq("club_id", context.clubId);
 
-        provider:
-          configuration.provider,
+  if (clearDefaultsError) {
+    redirectWithMessage(
+      "error",
+      `No fue posible limpiar los proveedores predeterminados: ${clearDefaultsError.message}`,
+    );
+  }
 
-        enabled:
-          configuration.enabled,
-
-        mode:
-          configuration.mode,
-
-        monthly_fees_enabled:
-          configuration
-            .monthly_fees_enabled,
-
-        one_time_enabled:
-          configuration.one_time_enabled,
-
-        automatic_debit_enabled:
-          configuration
-            .automatic_debit_enabled,
-
+  if (monthlyProvider) {
+    const {
+      error: monthlyUpdateError,
+    } = await supabase
+      .from("club_payment_providers")
+      .update({
         default_for_monthly_fees:
-          configuration.provider ===
-          monthlyProvider,
-
-        default_for_one_time:
-          configuration.provider ===
-          oneTimeProvider,
-
-        merchant_account_id:
-          configuration
-            .merchant_account_id,
-
-        public_settings:
-          configuration.public_settings,
-
-        secret_reference:
-          configuration.secret_reference,
+          true,
 
         updated_at:
           new Date().toISOString(),
-      }),
-    );
+      })
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId)
+      .eq(
+        "provider",
+        monthlyProvider,
+      );
 
-  const { error: updateError } =
-    await supabase
+    if (monthlyUpdateError) {
+      redirectWithMessage(
+        "error",
+        `No fue posible definir el proveedor de mensualidades: ${monthlyUpdateError.message}`,
+      );
+    }
+  }
+
+  if (oneTimeProvider) {
+    const {
+      error: oneTimeUpdateError,
+    } = await supabase
       .from("club_payment_providers")
-      .upsert(updatedConfigurations, {
-        onConflict: "id",
-      });
+      .update({
+        default_for_one_time:
+          true,
 
-  if (updateError) {
-    redirectWithMessage(
-      "error",
-      `No fue posible guardar los proveedores predeterminados: ${updateError.message}`,
-    );
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId)
+      .eq(
+        "provider",
+        oneTimeProvider,
+      );
+
+    if (oneTimeUpdateError) {
+      redirectWithMessage(
+        "error",
+        `No fue posible definir el proveedor de pagos puntuales: ${oneTimeUpdateError.message}`,
+      );
+    }
   }
 
   revalidatePath(
