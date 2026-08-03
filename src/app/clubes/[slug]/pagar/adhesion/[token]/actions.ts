@@ -5,9 +5,19 @@ import {
   randomUUID,
 } from "node:crypto";
 
-import { revalidatePath } from "next/cache";
+import {
+  revalidatePath,
+} from "next/cache";
+import {
+  redirect,
+} from "next/navigation";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createPagoTicAdhesion,
+} from "@/lib/payments/pagotic";
+import {
+  createAdminClient,
+} from "@/lib/supabase/admin";
 
 export type PublicAdhesionState = {
   error: string | null;
@@ -44,8 +54,16 @@ function isValidToken(value: string) {
   );
 }
 
+function getSiteUrl() {
+  return process.env
+    .NEXT_PUBLIC_SITE_URL
+    ?.trim()
+    .replace(/\/$/, "");
+}
+
 export async function requestPagoTicAdhesion(
-  _previousState: PublicAdhesionState,
+  _previousState:
+    PublicAdhesionState,
   formData: FormData,
 ): Promise<PublicAdhesionState> {
   const clubSlug = readText(
@@ -64,9 +82,13 @@ export async function requestPagoTicAdhesion(
   ).toLowerCase();
 
   const accepted =
-    formData.get("accepted") === "on";
+    formData.get("accepted") ===
+    "on";
 
-  if (!clubSlug || !isValidToken(token)) {
+  if (
+    !clubSlug ||
+    !isValidToken(token)
+  ) {
     return {
       error:
         "El enlace de adhesión no es válido.",
@@ -93,6 +115,17 @@ export async function requestPagoTicAdhesion(
     };
   }
 
+  const siteUrl = getSiteUrl();
+
+  if (!siteUrl) {
+    return {
+      error:
+        "El club todavía no puede iniciar adhesiones porque falta configurar su dirección pública.",
+      success: false,
+      message: null,
+    };
+  }
+
   const supabase =
     createAdminClient();
 
@@ -104,6 +137,7 @@ export async function requestPagoTicAdhesion(
     .select(`
       id,
       organization_id,
+      name,
       slug
     `)
     .eq("slug", clubSlug)
@@ -117,9 +151,6 @@ export async function requestPagoTicAdhesion(
       message: null,
     };
   }
-
-  const tokenHash =
-    hashToken(token);
 
   const {
     data: invitation,
@@ -138,7 +169,10 @@ export async function requestPagoTicAdhesion(
       status,
       expires_at
     `)
-    .eq("token_hash", tokenHash)
+    .eq(
+      "token_hash",
+      hashToken(token),
+    )
     .eq("club_id", club.id)
     .eq(
       "organization_id",
@@ -146,21 +180,10 @@ export async function requestPagoTicAdhesion(
     )
     .maybeSingle();
 
-  if (invitationError) {
-    console.error(
-      "Error consultando invitación:",
-      invitationError,
-    );
-
-    return {
-      error:
-        "No fue posible verificar el enlace.",
-      success: false,
-      message: null,
-    };
-  }
-
-  if (!invitation) {
+  if (
+    invitationError ||
+    !invitation
+  ) {
     return {
       error:
         "El enlace no existe o no pertenece a este club.",
@@ -174,14 +197,14 @@ export async function requestPagoTicAdhesion(
       error: null,
       success: true,
       message:
-        "Esta invitación ya fue utilizada. La solicitud de adhesión quedó registrada.",
+        "Esta invitación ya fue utilizada. La solicitud quedó registrada anteriormente.",
     };
   }
 
   if (invitation.status !== "active") {
     return {
       error:
-        "Esta invitación fue revocada y ya no puede utilizarse.",
+        "Esta invitación fue revocada.",
       success: false,
       message: null,
     };
@@ -200,39 +223,99 @@ export async function requestPagoTicAdhesion(
     };
   }
 
-  const {
-    data: configuration,
-    error: configurationError,
-  } = await supabase
-    .from("club_payment_providers")
-    .select(`
-      id,
-      enabled,
-      connection_status,
-      automatic_debit_enabled,
-      merchant_account_id
-    `)
-    .eq(
-      "id",
-      invitation.provider_configuration_id,
-    )
-    .eq("provider", "pagotic")
-    .eq("club_id", club.id)
-    .maybeSingle();
+  const [
+    configurationResult,
+    memberResult,
+    activityResult,
+    relationshipResult,
+  ] = await Promise.all([
+    supabase
+      .from(
+        "club_payment_providers",
+      )
+      .select(`
+        id,
+        enabled,
+        connection_status,
+        automatic_debit_enabled,
+        merchant_account_id
+      `)
+      .eq(
+        "id",
+        invitation
+          .provider_configuration_id,
+      )
+      .eq("provider", "pagotic")
+      .eq("club_id", club.id)
+      .maybeSingle(),
+
+    supabase
+      .from("members")
+      .select(`
+        id,
+        first_name,
+        last_name,
+        dni,
+        active
+      `)
+      .eq(
+        "id",
+        invitation.member_id,
+      )
+      .eq("club_id", club.id)
+      .eq("active", true)
+      .maybeSingle(),
+
+    supabase
+      .from("activities")
+      .select(`
+        id,
+        name,
+        active
+      `)
+      .eq(
+        "id",
+        invitation.activity_id,
+      )
+      .eq("club_id", club.id)
+      .eq("active", true)
+      .maybeSingle(),
+
+    supabase
+      .from("member_activities")
+      .select("id")
+      .eq(
+        "organization_id",
+        club.organization_id,
+      )
+      .eq("club_id", club.id)
+      .eq(
+        "member_id",
+        invitation.member_id,
+      )
+      .eq(
+        "activity_id",
+        invitation.activity_id,
+      )
+      .eq("active", true)
+      .maybeSingle(),
+  ]);
+
+  const configuration =
+    configurationResult.data;
+
+  const member =
+    memberResult.data;
+
+  const activity =
+    activityResult.data;
+
+  const relationship =
+    relationshipResult.data;
 
   if (
-    configurationError ||
-    !configuration
-  ) {
-    return {
-      error:
-        "No fue posible consultar la configuración de Pago TIC.",
-      success: false,
-      message: null,
-    };
-  }
-
-  if (
+    configurationResult.error ||
+    !configuration ||
     !configuration.enabled ||
     configuration.connection_status !==
       "active" ||
@@ -249,61 +332,37 @@ export async function requestPagoTicAdhesion(
     };
   }
 
-  const {
-    data: member,
-    error: memberError,
-  } = await supabase
-    .from("members")
-    .select(`
-      id,
-      active
-    `)
-    .eq(
-      "id",
-      invitation.member_id,
-    )
-    .eq("club_id", club.id)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (memberError || !member) {
+  if (
+    memberResult.error ||
+    !member
+  ) {
     return {
       error:
-        "La persona asociada a la invitación ya no se encuentra activa.",
+        "La persona asociada con esta invitación ya no se encuentra activa.",
       success: false,
       message: null,
     };
   }
 
-  const {
-    data: relationship,
-    error: relationshipError,
-  } = await supabase
-    .from("member_activities")
-    .select("id")
-    .eq(
-      "organization_id",
-      club.organization_id,
-    )
-    .eq("club_id", club.id)
-    .eq(
-      "member_id",
-      invitation.member_id,
-    )
-    .eq(
-      "activity_id",
-      invitation.activity_id,
-    )
-    .eq("active", true)
-    .maybeSingle();
+  if (
+    activityResult.error ||
+    !activity
+  ) {
+    return {
+      error:
+        "La actividad asociada con esta invitación ya no se encuentra activa.",
+      success: false,
+      message: null,
+    };
+  }
 
   if (
-    relationshipError ||
+    relationshipResult.error ||
     !relationship
   ) {
     return {
       error:
-        "La inscripción vinculada con esta invitación ya no se encuentra activa.",
+        "La inscripción asociada con esta invitación ya no está activa.",
       success: false,
       message: null,
     };
@@ -311,25 +370,24 @@ export async function requestPagoTicAdhesion(
 
   const {
     data: existingSubscription,
-    error: existingSubscriptionError,
+    error:
+      existingSubscriptionError,
   } = await supabase
     .from("payment_subscriptions")
     .select(`
       id,
-      status
+      status,
+      provider_subscription_id
     `)
     .eq(
       "organization_id",
       club.organization_id,
     )
     .eq("club_id", club.id)
-    .eq(
-      "member_id",
-      invitation.member_id,
-    )
+    .eq("member_id", member.id)
     .eq(
       "activity_id",
-      invitation.activity_id,
+      activity.id,
     )
     .eq("provider", "pagotic")
     .in("status", [
@@ -341,11 +399,6 @@ export async function requestPagoTicAdhesion(
     .maybeSingle();
 
   if (existingSubscriptionError) {
-    console.error(
-      "Error consultando adhesión existente:",
-      existingSubscriptionError,
-    );
-
     return {
       error:
         "No fue posible verificar las adhesiones existentes.",
@@ -354,9 +407,6 @@ export async function requestPagoTicAdhesion(
     };
   }
 
-  const now =
-    new Date().toISOString();
-
   if (existingSubscription) {
     await supabase
       .from(
@@ -364,8 +414,10 @@ export async function requestPagoTicAdhesion(
       )
       .update({
         status: "used",
-        used_at: now,
-        updated_at: now,
+        used_at:
+          new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", invitation.id);
 
@@ -386,8 +438,28 @@ export async function requestPagoTicAdhesion(
   const externalReference =
     randomUUID();
 
+  const now =
+    new Date().toISOString();
+
+  const initialPayload = {
+    source:
+      "public_invitation",
+
+    invitation_id:
+      invitation.id,
+
+    consent_at: now,
+
+    payer_email: email,
+
+    collector_id:
+      configuration
+        .merchant_account_id,
+  };
+
   const {
-    error: insertSubscriptionError,
+    error:
+      insertSubscriptionError,
   } = await supabase
     .from("payment_subscriptions")
     .insert({
@@ -398,11 +470,10 @@ export async function requestPagoTicAdhesion(
 
       club_id: club.id,
 
-      member_id:
-        invitation.member_id,
+      member_id: member.id,
 
       activity_id:
-        invitation.activity_id,
+        activity.id,
 
       provider_configuration_id:
         configuration.id,
@@ -414,32 +485,14 @@ export async function requestPagoTicAdhesion(
 
       status: "pending",
 
-      provider_payload: {
-        source:
-          "public_invitation",
-
-        invitation_id:
-          invitation.id,
-
-        consent_at: now,
-
-        payer_email: email,
-
-        collector_id:
-          configuration
-            .merchant_account_id,
-      },
+      provider_payload:
+        initialPayload,
 
       created_at: now,
       updated_at: now,
     });
 
   if (insertSubscriptionError) {
-    console.error(
-      "Error creando adhesión pendiente:",
-      insertSubscriptionError,
-    );
-
     return {
       error:
         `No fue posible registrar la adhesión: ${insertSubscriptionError.message}`,
@@ -448,47 +501,179 @@ export async function requestPagoTicAdhesion(
     };
   }
 
-  const {
-    error: updateInvitationError,
-  } = await supabase
-    .from(
-      "payment_subscription_invitations",
-    )
-    .update({
-      status: "used",
-      used_at: now,
-      updated_at: now,
-    })
-    .eq("id", invitation.id)
-    .eq("status", "active");
+  const resultUrl =
+    `${siteUrl}/clubes/${club.slug}` +
+    `/pagar/adhesion/resultado` +
+    `?solicitud=${subscriptionId}`;
 
-  if (updateInvitationError) {
-    await supabase
-      .from("payment_subscriptions")
-      .delete()
+  try {
+    const pagoTicResult =
+      await createPagoTicAdhesion({
+        collectorId:
+          configuration
+            .merchant_account_id,
+
+        externalReference,
+
+        conceptId:
+          activity.id,
+
+        conceptDescription:
+          `Adhesión a ${activity.name}`,
+
+        payerReference:
+          member.id,
+
+        payerName:
+          `${member.first_name} ${member.last_name}`,
+
+        payerEmail: email,
+
+        payerDni:
+          member.dni,
+
+        notificationUrl:
+          `${siteUrl}/api/payments/pagotic/webhook`,
+
+        returnUrl:
+          resultUrl,
+
+        backUrl:
+          `${resultUrl}&regreso=cancelado`,
+
+        metadata: {
+          internal_subscription_id:
+            subscriptionId,
+
+          invitation_id:
+            invitation.id,
+
+          organization_id:
+            club.organization_id,
+
+          club_id:
+            club.id,
+
+          member_id:
+            member.id,
+
+          activity_id:
+            activity.id,
+        },
+      });
+
+    const {
+      error:
+        subscriptionUpdateError,
+    } = await supabase
+      .from(
+        "payment_subscriptions",
+      )
+      .update({
+        provider_subscription_id:
+          pagoTicResult.id,
+
+        status: "pending",
+
+        provider_payload: {
+          ...initialPayload,
+
+          provider_status:
+            pagoTicResult.status ??
+            "pending",
+
+          provider_response:
+            pagoTicResult,
+        },
+
+        updated_at:
+          new Date().toISOString(),
+      })
       .eq("id", subscriptionId);
 
-    console.error(
-      "Error consumiendo invitación:",
-      updateInvitationError,
+    if (
+      subscriptionUpdateError
+    ) {
+      console.error(
+        "La adhesión fue creada en Pago TIC, pero no pudo actualizarse localmente:",
+        subscriptionUpdateError,
+      );
+
+      return {
+        error:
+          "Pago TIC creó la adhesión, pero ClubSmart no pudo completar el registro. Contactá al club antes de volver a intentarlo.",
+        success: false,
+        message: null,
+      };
+    }
+
+    const {
+      error:
+        invitationUpdateError,
+    } = await supabase
+      .from(
+        "payment_subscription_invitations",
+      )
+      .update({
+        status: "used",
+        used_at:
+          new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", invitation.id)
+      .eq("status", "active");
+
+    if (
+      invitationUpdateError
+    ) {
+      console.error(
+        "No se pudo marcar la invitación como utilizada:",
+        invitationUpdateError,
+      );
+    }
+
+    revalidatePath(
+      "/panel/pagos/adhesiones",
     );
 
+    redirect(
+      pagoTicResult.form_url,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "No fue posible conectarse con Pago TIC.";
+
+    console.error(
+      "Error iniciando adhesión:",
+      error,
+    );
+
+    await supabase
+      .from(
+        "payment_subscriptions",
+      )
+      .update({
+        status: "error",
+
+        provider_payload: {
+          ...initialPayload,
+
+          connection_error:
+            message,
+        },
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", subscriptionId);
+
     return {
-      error:
-        "No fue posible completar la solicitud. Volvé a intentarlo.",
+      error: message,
       success: false,
       message: null,
     };
   }
-
-  revalidatePath(
-    "/panel/pagos/adhesiones",
-  );
-
-  return {
-    error: null,
-    success: true,
-    message:
-      "La solicitud de adhesión fue registrada correctamente. El club podrá continuar el proceso mediante Pago TIC.",
-  };
 }
