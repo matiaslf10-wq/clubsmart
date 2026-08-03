@@ -115,16 +115,30 @@ export async function requestPagoTicAdhesion(
     };
   }
 
+  const webhookSecret =
+  process.env
+    .PAGOTIC_WEBHOOK_SECRET
+    ?.trim();
+
   const siteUrl = getSiteUrl();
 
   if (!siteUrl) {
-    return {
-      error:
-        "El club todavía no puede iniciar adhesiones porque falta configurar su dirección pública.",
-      success: false,
-      message: null,
-    };
-  }
+  return {
+    error:
+      "El club todavía no puede iniciar adhesiones porque falta configurar su dirección pública.",
+    success: false,
+    message: null,
+  };
+}
+
+if (!webhookSecret) {
+  return {
+    error:
+      "La recepción de notificaciones de Pago TIC todavía no está configurada.",
+    success: false,
+    message: null,
+  };
+}
 
   const supabase =
     createAdminClient();
@@ -533,7 +547,8 @@ export async function requestPagoTicAdhesion(
           member.dni,
 
         notificationUrl:
-          `${siteUrl}/api/payments/pagotic/webhook`,
+  `${siteUrl}/api/payments/pagotic/webhook` +
+  `?secret=${encodeURIComponent(webhookSecret)}`,
 
         returnUrl:
           resultUrl,
