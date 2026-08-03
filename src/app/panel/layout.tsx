@@ -74,6 +74,15 @@ export default async function PanelLayout({
   Cuotas
 </Link>
 
+{canManagePayments ? (
+  <Link
+    href="/panel/pagos/adhesiones"
+    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+  >
+    Adhesiones
+  </Link>
+) : null}
+
 <Link
   href="/panel/pagos"
   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
