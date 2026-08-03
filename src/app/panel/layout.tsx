@@ -83,6 +83,15 @@ export default async function PanelLayout({
   </Link>
 ) : null}
 
+{canManagePayments ? (
+  <Link
+    href="/panel/pagos/lotes"
+    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+  >
+    Lotes
+  </Link>
+) : null}
+
 <Link
   href="/panel/pagos"
   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
