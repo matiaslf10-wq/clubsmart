@@ -2,8 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
-  updateDefaultProviders,
-  updatePaymentProvider,
+  reactivatePagoTic,
+  savePagoTicSetup,
+  startPagoTicSetup,
+  suspendPagoTic,
 } from "@/app/panel/pagos/configuracion/actions";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,64 +17,39 @@ type PageProps = {
   }>;
 };
 
-type PaymentProvider =
-  | "pagotic"
-  | "mercado_pago";
+type ConnectionStatus =
+  | "not_started"
+  | "pending"
+  | "active"
+  | "suspended"
+  | "rejected";
 
-type ProviderConfiguration = {
+type PagoTicConfiguration = {
   id: string;
-  provider: PaymentProvider;
   enabled: boolean;
   mode: "sandbox" | "production";
   monthly_fees_enabled: boolean;
   one_time_enabled: boolean;
   automatic_debit_enabled: boolean;
   default_for_monthly_fees: boolean;
-  default_for_one_time: boolean;
   merchant_account_id: string | null;
-};
-
-type PlatformStatus = {
-  configured: boolean;
-  title: string;
-  description: string;
+  external_entity_id: string | null;
+  connection_status: ConnectionStatus;
+  onboarding_started_at: string | null;
+  connected_at: string | null;
+  last_connection_error: string | null;
 };
 
 export const dynamic = "force-dynamic";
 
-const providerOrder: PaymentProvider[] = [
-  "pagotic",
-  "mercado_pago",
-];
-
-function providerName(
-  provider: PaymentProvider,
-) {
-  return provider === "pagotic"
-    ? "Pago TIC"
-    : "Mercado Pago";
-}
-
-function providerDescription(
-  provider: PaymentProvider,
-) {
-  return provider === "pagotic"
-    ? "Proveedor principal para cuotas mensuales, adhesiones y débito automático."
-    : "Proveedor auxiliar para eventos, reservas, señas y otros cobros de una sola vez.";
-}
-
-function hasUsableEnvironmentValue(
-  variableName: string,
-) {
-  const value =
-    process.env[variableName]?.trim();
+function hasUsableEnvironmentValue(variableName: string) {
+  const value = process.env[variableName]?.trim();
 
   if (!value) {
     return false;
   }
 
-  const normalized =
-    value.toUpperCase();
+  const normalized = value.toUpperCase();
 
   return !(
     normalized.startsWith("TU_") ||
@@ -83,133 +60,123 @@ function hasUsableEnvironmentValue(
   );
 }
 
-function getPlatformStatus(
-  provider: PaymentProvider,
-): PlatformStatus {
-  if (provider === "pagotic") {
-    const configured = [
-      "PAGOTIC_USERNAME",
-      "PAGOTIC_PASSWORD",
-      "PAGOTIC_CLIENT_ID",
-      "PAGOTIC_CLIENT_SECRET",
-    ].every(
-      hasUsableEnvironmentValue,
-    );
+function hasPagoTicPlatformCredentials() {
+  return [
+    "PAGOTIC_USERNAME",
+    "PAGOTIC_PASSWORD",
+    "PAGOTIC_CLIENT_ID",
+    "PAGOTIC_CLIENT_SECRET",
+  ].every(hasUsableEnvironmentValue);
+}
 
+function getStatusContent(status: ConnectionStatus) {
+  if (status === "active") {
     return {
-      configured,
+      label: "Activo",
 
-      title: configured
-        ? "Integración general disponible"
-        : "Integración general pendiente",
+      className: "border-green-200 bg-green-50 text-green-900",
 
-      description: configured
-        ? "ClubSmart dispone de las credenciales generales para comunicarse con Pago TIC."
-        : "Todavía deben cargarse en el servidor las credenciales generales entregadas por Pago TIC.",
+      description: "El club está habilitado para operar con Pago TIC.",
+    };
+  }
+
+  if (status === "pending") {
+    return {
+      label: "Configuración pendiente",
+
+      className: "border-amber-200 bg-amber-50 text-amber-900",
+
+      description:
+        "El administrador inició el alta, pero todavía falta completar o confirmar la conexión.",
+    };
+  }
+
+  if (status === "suspended") {
+    return {
+      label: "Suspendido",
+
+      className: "border-slate-300 bg-slate-100 text-slate-900",
+
+      description:
+        "No se generarán nuevas operaciones hasta que el administrador reactive Pago TIC.",
+    };
+  }
+
+  if (status === "rejected") {
+    return {
+      label: "Rechazado",
+
+      className: "border-red-200 bg-red-50 text-red-900",
+
+      description: "Pago TIC rechazó o no pudo completar el alta de este club.",
     };
   }
 
   return {
-    configured: false,
+    label: "No configurado",
 
-    title:
-      "Conexión individual pendiente",
+    className: "border-slate-200 bg-white text-slate-900",
 
     description:
-      "Mercado Pago se habilitará más adelante mediante una conexión propia para cada club. No se utilizará un access token global.",
+      "El administrador todavía no inició la configuración de Pago TIC.",
   };
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(new Date(value));
 }
 
 export default async function PaymentConfigurationPage({
   searchParams,
 }: PageProps) {
   const context = await getAdminContext();
+
   const messages = await searchParams;
 
-  if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
+  if (context.role !== "owner" && context.role !== "admin") {
     redirect("/panel");
   }
 
-  let configurationsData:
-    | ProviderConfiguration[]
-    | null = null;
+  const supabase = createAdminClient();
 
-  let configurationLoadError:
-    | string
-    | null = null;
+  const { data, error } = await supabase
+    .from("club_payment_providers")
+    .select(
+      `
+      id,
+      enabled,
+      mode,
+      monthly_fees_enabled,
+      one_time_enabled,
+      automatic_debit_enabled,
+      default_for_monthly_fees,
+      merchant_account_id,
+      external_entity_id,
+      connection_status,
+      onboarding_started_at,
+      connected_at,
+      last_connection_error
+    `,
+    )
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .eq("provider", "pagotic")
+    .maybeSingle();
 
-  try {
-    const supabase =
-      createAdminClient();
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("club_payment_providers")
-      .select(`
-        id,
-        provider,
-        enabled,
-        mode,
-        monthly_fees_enabled,
-        one_time_enabled,
-        automatic_debit_enabled,
-        default_for_monthly_fees,
-        default_for_one_time,
-        merchant_account_id
-      `)
-      .eq(
-        "organization_id",
-        context.organizationId,
-      )
-      .eq(
-        "club_id",
-        context.clubId,
-      );
-
-    if (error) {
-      configurationLoadError =
-        error.message;
-    } else {
-      configurationsData =
-        data as ProviderConfiguration[];
-    }
-  } catch (error) {
-    console.error(
-      "Error cargando la configuración de pagos:",
-      error,
-    );
-
-    configurationLoadError =
-      error instanceof Error
-        ? error.message
-        : "Ocurrió un error inesperado al conectar con la base de datos.";
-  }
-
-  if (configurationLoadError) {
+  if (error) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-8">
-        <h1 className="text-2xl font-bold text-red-900">
-          No fue posible cargar la
-          configuración de pagos
-        </h1>
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-900">
+        <h1 className="text-2xl font-bold">No fue posible cargar Pago TIC</h1>
 
-        <p className="mt-3 text-red-800">
-          Revisá la conexión administrativa
-          con Supabase y las variables de
-          entorno del servidor.
-        </p>
-
-        {process.env.NODE_ENV ===
-        "development" ? (
-          <pre className="mt-4 overflow-auto rounded-lg bg-red-100 p-4 text-sm text-red-900">
-            {configurationLoadError}
-          </pre>
-        ) : null}
+        <p className="mt-3">{error.message}</p>
 
         <Link
           href="/panel"
@@ -221,81 +188,66 @@ export default async function PaymentConfigurationPage({
     );
   }
 
-  const configurations =
-    configurationsData ?? [];
+  const configuration = data as PagoTicConfiguration | null;
 
-  const configurationByProvider =
-    new Map(
-      configurations.map(
-        (configuration) => [
-          configuration.provider,
-          configuration,
-        ],
-      ),
-    );
+  const connectionStatus = configuration?.connection_status ?? "not_started";
 
-  const orderedConfigurations =
-    providerOrder
-      .map((provider) =>
-        configurationByProvider.get(
-          provider,
-        ),
-      )
-      .filter(
-        (
-          configuration,
-        ): configuration is ProviderConfiguration =>
-          Boolean(configuration),
-      );
+  const statusContent = getStatusContent(connectionStatus);
 
-  const currentMonthlyProvider =
-    configurations.find(
-      (configuration) =>
-        configuration
-          .default_for_monthly_fees,
-    )?.provider ?? "";
+  const platformConfigured = hasPagoTicPlatformCredentials();
 
-  const currentOneTimeProvider =
-    configurations.find(
-      (configuration) =>
-        configuration
-          .default_for_one_time,
-    )?.provider ?? "";
+  const collectorConfigured = Boolean(configuration?.merchant_account_id);
 
-  const pagoTicStatus =
-    getPlatformStatus("pagotic");
+  const monthlyConfigured = Boolean(configuration?.monthly_fees_enabled);
 
-  const monthlyOptions =
-    orderedConfigurations.filter(
-      (configuration) =>
-        configuration.provider ===
-          "pagotic" &&
-        pagoTicStatus.configured &&
-        configuration.enabled &&
-        configuration
-          .monthly_fees_enabled &&
-        configuration
-          .automatic_debit_enabled &&
-        Boolean(
-          configuration
-            .merchant_account_id,
-        ),
-    );
+  const debitConfigured = Boolean(configuration?.automatic_debit_enabled);
 
-  const oneTimeOptions =
-    orderedConfigurations.filter(
-      (configuration) =>
-        configuration.provider ===
-          "pagotic" &&
-        pagoTicStatus.configured &&
-        configuration.enabled &&
-        configuration
-          .one_time_enabled &&
-        Boolean(
-          configuration
-            .merchant_account_id,
-        ),
-    );
+  const ready =
+    connectionStatus === "active" &&
+    platformConfigured &&
+    collectorConfigured &&
+    monthlyConfigured &&
+    debitConfigured;
+
+  const onboardingUrl = process.env.PAGOTIC_ONBOARDING_URL?.trim();
+
+  const checklist = [
+    {
+      label: "Alta iniciada por el administrador",
+
+      completed: connectionStatus !== "not_started",
+    },
+
+    {
+      label: "Collector ID del club cargado",
+
+      completed: collectorConfigured,
+    },
+
+    {
+      label: "Conector técnico disponible",
+
+      completed: platformConfigured,
+    },
+
+    {
+      label: "Cuotas mensuales habilitadas",
+
+      completed: monthlyConfigured,
+    },
+
+    {
+      label: "Adhesión y débito automático habilitados",
+
+      completed: debitConfigured,
+    },
+
+    {
+      label: "Alta confirmada por Pago TIC",
+
+      completed: connectionStatus === "active",
+    },
+  ];
 
   return (
     <div>
@@ -312,30 +264,15 @@ export default async function PaymentConfigurationPage({
         </p>
 
         <h1 className="mt-3 text-3xl font-bold text-slate-900">
-          Configuración de pagos
+          Alta y configuración de Pago TIC
         </h1>
 
-        <p className="mt-3 max-w-3xl text-slate-600">
-          Pago TIC administra las cuotas,
-          adhesiones y débitos automáticos.
-          Mercado Pago quedará reservado para
-          operaciones puntuales.
+        <p className="mt-3 max-w-3xl leading-7 text-slate-600">
+          El administrador del club gestiona desde aquí la vinculación, las
+          cuotas mensuales y el débito automático. ClubSmart no recibe ni
+          redistribuye los fondos cobrados.
         </p>
       </div>
-
-      <section className="mt-8 rounded-2xl border border-blue-200 bg-blue-50 p-6">
-        <h2 className="font-semibold text-blue-950">
-          Acreditación directa al club
-        </h2>
-
-        <p className="mt-2 text-sm leading-6 text-blue-900">
-          Cada club debe estar identificado
-          como una entidad recaudadora propia.
-          ClubSmart registra y concilia las
-          operaciones, pero no recibe ni
-          redistribuye el dinero cobrado.
-        </p>
-      </section>
 
       {messages.error ? (
         <div
@@ -355,418 +292,370 @@ export default async function PaymentConfigurationPage({
         </div>
       ) : null}
 
-      <section className="mt-8 grid gap-6 xl:grid-cols-2">
-        {orderedConfigurations.map(
-          (configuration) => {
-            const platformStatus =
-              getPlatformStatus(
-                configuration.provider,
-              );
+      <section
+        className={`mt-8 rounded-2xl border p-7 ${statusContent.className}`}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wider">
+              Estado de conexión
+            </p>
 
-            const collectorConfigured =
-              configuration.provider ===
-              "pagotic"
-                ? Boolean(
-                    configuration
-                      .merchant_account_id,
-                  )
-                : false;
+            <h2 className="mt-2 text-2xl font-bold">{statusContent.label}</h2>
 
-            const operational =
-              configuration.provider ===
-                "pagotic" &&
-              platformStatus.configured &&
-              collectorConfigured &&
-              configuration.enabled;
+            <p className="mt-2 max-w-2xl leading-6">
+              {statusContent.description}
+            </p>
+          </div>
 
-            const saveAction =
-              updatePaymentProvider.bind(
-                null,
-                configuration.provider,
-              );
+          {ready ? (
+            <span className="w-fit rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white">
+              Listo para operar
+            </span>
+          ) : (
+            <span className="w-fit rounded-full bg-white/70 px-4 py-2 text-sm font-semibold">
+              Configuración incompleta
+            </span>
+          )}
+        </div>
+      </section>
 
-            return (
-              <article
-                key={configuration.id}
-                className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">
-                      {providerName(
-                        configuration.provider,
-                      )}
-                    </h2>
+      <section className="mt-6 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-900">
+            Progreso de configuración
+          </h2>
 
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {providerDescription(
-                        configuration.provider,
-                      )}
-                    </p>
-                  </div>
-
-                  <span
-                    className={
-                      operational
-                        ? "inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800"
-                        : "inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
-                    }
-                  >
-                    {operational
-                      ? "Operativo"
-                      : "No operativo"}
-                  </span>
-                </div>
-
-                <div
+          <div className="mt-6 space-y-4">
+            {checklist.map((item) => (
+              <div key={item.label} className="flex items-start gap-3">
+                <span
                   className={
-                    platformStatus.configured
-                      ? "mt-6 rounded-xl border border-green-200 bg-green-50 p-4"
-                      : "mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4"
+                    item.completed
+                      ? "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700"
+                      : "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-500"
                   }
                 >
-                  <p
-                    className={
-                      platformStatus.configured
-                        ? "font-semibold text-green-900"
-                        : "font-semibold text-amber-900"
-                    }
-                  >
-                    {platformStatus.title}
-                  </p>
+                  {item.completed ? "✓" : "–"}
+                </span>
 
-                  <p
-                    className={
-                      platformStatus.configured
-                        ? "mt-1 text-sm leading-6 text-green-800"
-                        : "mt-1 text-sm leading-6 text-amber-800"
-                    }
+                <span
+                  className={
+                    item.completed
+                      ? "text-sm font-medium text-slate-900"
+                      : "text-sm text-slate-600"
+                  }
+                >
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-7 border-t border-slate-200 pt-6">
+            <dl className="space-y-4 text-sm">
+              <div>
+                <dt className="text-slate-500">Alta iniciada</dt>
+
+                <dd className="mt-1 font-medium text-slate-900">
+                  {formatDate(configuration?.onboarding_started_at ?? null)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-slate-500">Conexión activa desde</dt>
+
+                <dd className="mt-1 font-medium text-slate-900">
+                  {formatDate(configuration?.connected_at ?? null)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          {connectionStatus === "not_started" ? (
+            <>
+              <h2 className="text-xl font-bold text-slate-900">
+                Paso 1: iniciar el alta
+              </h2>
+
+              <p className="mt-3 leading-6 text-slate-600">
+                El administrador debe iniciar el proceso y obtener de Pago TIC
+                el identificador correspondiente al club.
+              </p>
+
+              {onboardingUrl ? (
+                <a
+                  href={onboardingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-6 inline-flex rounded-lg border border-blue-300 bg-blue-50 px-5 py-3 font-semibold text-blue-800 transition hover:bg-blue-100"
+                >
+                  Abrir alta en Pago TIC
+                </a>
+              ) : null}
+
+              <form action={startPagoTicSetup} className="mt-4">
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-slate-900 px-6 py-4 font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Comenzar configuración
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-slate-900">
+                Datos de la cuenta del club
+              </h2>
+
+              <p className="mt-3 leading-6 text-slate-600">
+                Estos datos deben ser cargados por el administrador con la
+                información entregada por Pago TIC.
+              </p>
+
+              <form action={savePagoTicSetup} className="mt-7 space-y-6">
+                <div>
+                  <label
+                    htmlFor="merchant_account_id"
+                    className="text-sm font-medium text-slate-700"
                   >
-                    {
-                      platformStatus.description
-                    }
+                    Collector ID
+                  </label>
+
+                  <input
+                    id="merchant_account_id"
+                    name="merchant_account_id"
+                    type="text"
+                    required
+                    defaultValue={configuration?.merchant_account_id ?? ""}
+                    placeholder="Identificador entregado por Pago TIC"
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-3"
+                  />
+
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    Identifica a la entidad que debe recibir la recaudación.
                   </p>
                 </div>
 
-                {configuration.provider ===
-                "pagotic" ? (
-                  <form
-                    action={saveAction}
-                    className="mt-7 space-y-6"
+                <div>
+                  <label
+                    htmlFor="external_entity_id"
+                    className="text-sm font-medium text-slate-700"
                   >
+                    Identificador adicional
+                  </label>
+
+                  <input
+                    id="external_entity_id"
+                    name="external_entity_id"
+                    type="text"
+                    defaultValue={configuration?.external_entity_id ?? ""}
+                    placeholder="Opcional"
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-3"
+                  />
+
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    Se utiliza únicamente si Pago TIC entrega otro código de
+                    entidad además del Collector ID.
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="mode"
+                    className="text-sm font-medium text-slate-700"
+                  >
+                    Entorno
+                  </label>
+
+                  <select
+                    id="mode"
+                    name="mode"
+                    defaultValue={configuration?.mode ?? "sandbox"}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3"
+                  >
+                    <option value="sandbox">Pruebas / sandbox</option>
+
+                    <option value="production">Producción</option>
+                  </select>
+                </div>
+
+                <fieldset>
+                  <legend className="text-sm font-medium text-slate-700">
+                    Servicios del club
+                  </legend>
+
+                  <div className="mt-3 space-y-4">
                     <label className="flex items-start gap-3">
                       <input
-                        name="enabled"
+                        name="monthly_fees_enabled"
                         type="checkbox"
                         defaultChecked={
-                          configuration.enabled
+                          configuration?.monthly_fees_enabled ?? true
                         }
                         className="mt-1 h-4 w-4 rounded border-slate-300"
                       />
 
                       <span>
-                        <span className="block font-medium text-slate-900">
-                          Habilitar Pago TIC
+                        <span className="block text-sm font-medium text-slate-900">
+                          Cuotas mensuales
                         </span>
 
-                        <span className="mt-1 block text-sm text-slate-500">
-                          Solo puede habilitarse
-                          cuando el club tenga
-                          Collector ID.
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">
+                          Permite generar y cobrar las obligaciones mensuales
+                          del club.
                         </span>
                       </span>
                     </label>
 
-                    <div>
-                      <label
-                        htmlFor="mode-pagotic"
-                        className="text-sm font-medium text-slate-700"
-                      >
-                        Modo
-                      </label>
-
-                      <select
-                        id="mode-pagotic"
-                        name="mode"
-                        defaultValue={
-                          configuration.mode
-                        }
-                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3"
-                      >
-                        <option value="sandbox">
-                          Pruebas / sandbox
-                        </option>
-
-                        <option value="production">
-                          Producción
-                        </option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="merchant-pagotic"
-                        className="text-sm font-medium text-slate-700"
-                      >
-                        Collector ID del club
-                      </label>
-
+                    <label className="flex items-start gap-3">
                       <input
-                        id="merchant-pagotic"
-                        name="merchant_account_id"
-                        type="text"
-                        defaultValue={
-                          configuration
-                            .merchant_account_id ??
-                          ""
+                        name="automatic_debit_enabled"
+                        type="checkbox"
+                        defaultChecked={
+                          configuration?.automatic_debit_enabled ?? true
                         }
-                        placeholder="Identificador entregado por Pago TIC"
-                        className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-3"
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
                       />
 
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        Identifica a la entidad
-                        que debe recibir la
-                        recaudación. No es una
-                        contraseña ni un token.
-                      </p>
-                    </div>
+                      <span>
+                        <span className="block text-sm font-medium text-slate-900">
+                          Adhesión y débito automático
+                        </span>
 
-                    <fieldset>
-                      <legend className="text-sm font-medium text-slate-700">
-                        Operaciones permitidas
-                      </legend>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">
+                          El administrador deberá confirmar cada generación
+                          mensual de débitos.
+                        </span>
+                      </span>
+                    </label>
 
-                      <div className="mt-3 space-y-3">
-                        <label className="flex items-center gap-3">
-                          <input
-                            name="monthly_fees_enabled"
-                            type="checkbox"
-                            defaultChecked={
-                              configuration
-                                .monthly_fees_enabled
-                            }
-                            className="h-4 w-4 rounded border-slate-300"
-                          />
-
-                          <span className="text-sm text-slate-700">
-                            Cuotas mensuales
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-3">
-                          <input
-                            name="automatic_debit_enabled"
-                            type="checkbox"
-                            defaultChecked={
-                              configuration
-                                .automatic_debit_enabled
-                            }
-                            className="h-4 w-4 rounded border-slate-300"
-                          />
-
-                          <span className="text-sm text-slate-700">
-                            Adhesión y débito
-                            automático
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-3">
-                          <input
-                            name="one_time_enabled"
-                            type="checkbox"
-                            defaultChecked={
-                              configuration
-                                .one_time_enabled
-                            }
-                            className="h-4 w-4 rounded border-slate-300"
-                          />
-
-                          <span className="text-sm text-slate-700">
-                            Permitir también
-                            pagos puntuales
-                          </span>
-                        </label>
-                      </div>
-                    </fieldset>
-
-                    <button
-                      type="submit"
-                      className="w-full rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700"
-                    >
-                      Guardar Pago TIC
-                    </button>
-                  </form>
-                ) : (
-                  <div className="mt-7">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                      <p className="font-semibold text-slate-900">
-                        Segunda etapa
-                      </p>
-
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        Mercado Pago se
-                        incorporará mediante
-                        OAuth para que cada club
-                        conecte su propia cuenta.
-                        Hasta entonces permanecerá
-                        deshabilitado.
-                      </p>
-                    </div>
-
-                    <form
-                      action={saveAction}
-                      className="mt-4"
-                    >
+                    <label className="flex items-start gap-3">
                       <input
-                        type="hidden"
-                        name="mode"
-                        value={
-                          configuration.mode
+                        name="one_time_enabled"
+                        type="checkbox"
+                        defaultChecked={
+                          configuration?.one_time_enabled ?? false
                         }
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
                       />
 
-                      <input
-                        type="hidden"
-                        name="merchant_account_id"
-                        value=""
-                      />
+                      <span>
+                        <span className="block text-sm font-medium text-slate-900">
+                          Pagos puntuales mediante Pago TIC
+                        </span>
 
-                      <button
-                        type="submit"
-                        className="w-full rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Mantener deshabilitado
-                      </button>
-                    </form>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">
+                          Puede utilizarse además para pagos extraordinarios.
+                        </span>
+                      </span>
+                    </label>
                   </div>
-                )}
-              </article>
-            );
-          },
-        )}
+                </fieldset>
+
+                <label className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                  <input
+                    name="provider_approved"
+                    type="checkbox"
+                    defaultChecked={connectionStatus === "active"}
+                    className="mt-1 h-4 w-4 rounded border-blue-300"
+                  />
+
+                  <span>
+                    <span className="block text-sm font-semibold text-blue-950">
+                      Pago TIC confirmó el alta del club
+                    </span>
+
+                    <span className="mt-1 block text-xs leading-5 text-blue-900">
+                      Debe marcarse solamente después de recibir la confirmación
+                      y el Collector ID correspondiente.
+                    </span>
+                  </span>
+                </label>
+
+                {!platformConfigured ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                    El conector técnico de Pago TIC todavía no tiene
+                    credenciales válidas en el servidor. El administrador puede
+                    guardar los datos, pero la conexión no podrá activarse.
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-slate-900 px-6 py-4 font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Guardar configuración
+                </button>
+              </form>
+            </>
+          )}
+        </article>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">
-          Proveedores predeterminados
-        </h2>
+      {connectionStatus === "active" ? (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Administración de la conexión
+              </h2>
 
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Pago TIC debe ser la opción
-          predeterminada para mensualidades.
-          Los pagos puntuales pueden quedar sin
-          proveedor hasta incorporar Mercado
-          Pago por club.
-        </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Suspender la conexión impide generar nuevas operaciones, pero
+                conserva las adhesiones, pagos e historial existentes.
+              </p>
+            </div>
 
-        <form
-          action={updateDefaultProviders}
-          className="mt-6 grid gap-6 md:grid-cols-2"
-        >
-          <div>
-            <label
-              htmlFor="monthly_provider"
-              className="text-sm font-medium text-slate-700"
-            >
-              Mensualidades
-            </label>
-
-            <select
-              id="monthly_provider"
-              name="monthly_provider"
-              defaultValue={
-                currentMonthlyProvider
-              }
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="">
-                Sin proveedor predeterminado
-              </option>
-
-              {monthlyOptions.map(
-                (configuration) => (
-                  <option
-                    key={
-                      configuration.provider
-                    }
-                    value={
-                      configuration.provider
-                    }
-                  >
-                    {providerName(
-                      configuration.provider,
-                    )}
-                  </option>
-                ),
-              )}
-            </select>
+            <form action={suspendPagoTic}>
+              <button
+                type="submit"
+                className="rounded-lg border border-red-300 px-5 py-3 font-semibold text-red-700 transition hover:bg-red-50"
+              >
+                Suspender Pago TIC
+              </button>
+            </form>
           </div>
+        </section>
+      ) : null}
 
-          <div>
-            <label
-              htmlFor="one_time_provider"
-              className="text-sm font-medium text-slate-700"
-            >
-              Pagos puntuales
-            </label>
+      {connectionStatus === "suspended" ? (
+        <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-7">
+          <h2 className="text-xl font-bold text-amber-950">
+            Pago TIC está suspendido
+          </h2>
 
-            <select
-              id="one_time_provider"
-              name="one_time_provider"
-              defaultValue={
-                currentOneTimeProvider
-              }
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="">
-                Sin proveedor predeterminado
-              </option>
+          <p className="mt-2 text-sm leading-6 text-amber-900">
+            El administrador puede reactivar la conexión sin perder el
+            historial.
+          </p>
 
-              {oneTimeOptions.map(
-                (configuration) => (
-                  <option
-                    key={
-                      configuration.provider
-                    }
-                    value={
-                      configuration.provider
-                    }
-                  >
-                    {providerName(
-                      configuration.provider,
-                    )}
-                  </option>
-                ),
-              )}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
+          <form action={reactivatePagoTic} className="mt-5">
             <button
               type="submit"
-              className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
+              className="rounded-lg bg-amber-700 px-6 py-3 font-semibold text-white transition hover:bg-amber-800"
             >
-              Guardar proveedores
-              predeterminados
+              Reactivar Pago TIC
             </button>
-          </div>
-        </form>
-      </section>
+          </form>
+        </section>
+      ) : null}
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="font-semibold text-slate-900">
-          Separación de credenciales
-        </h2>
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900">Mercado Pago</h2>
 
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Las credenciales técnicas generales
-          se administran únicamente en el
-          servidor de ClubSmart. En esta pantalla
-          se guarda solamente el identificador
-          público de la entidad recaudadora
-          correspondiente al club.
+        <p className="mt-3 max-w-3xl leading-6 text-slate-600">
+          Se incorporará en una segunda etapa para eventos, reservas, señas y
+          otros cobros puntuales. Cada club conectará su propia cuenta; no se
+          utilizará una cuenta central de ClubSmart.
         </p>
+
+        <span className="mt-4 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+          Próximamente
+        </span>
       </section>
     </div>
   );

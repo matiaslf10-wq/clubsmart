@@ -6,29 +6,27 @@ import { redirect } from "next/navigation";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type PaymentProvider =
-  | "pagotic"
-  | "mercado_pago";
-
 type ProviderMode =
   | "sandbox"
   | "production";
 
-type ProviderConfiguration = {
+type ConnectionStatus =
+  | "not_started"
+  | "pending"
+  | "active"
+  | "suspended"
+  | "rejected";
+
+type PagoTicConfiguration = {
   id: string;
-  provider: PaymentProvider;
-  enabled: boolean;
+  mode: ProviderMode;
   monthly_fees_enabled: boolean;
   one_time_enabled: boolean;
   automatic_debit_enabled: boolean;
   merchant_account_id: string | null;
+  external_entity_id: string | null;
+  connection_status: ConnectionStatus;
 };
-
-const validProviders =
-  new Set<PaymentProvider>([
-    "pagotic",
-    "mercado_pago",
-  ]);
 
 function canManagePayments(role: string) {
   return (
@@ -66,14 +64,6 @@ function redirectWithMessage(
   );
 }
 
-function providerName(
-  provider: PaymentProvider,
-) {
-  return provider === "pagotic"
-    ? "Pago TIC"
-    : "Mercado Pago";
-}
-
 function hasUsableEnvironmentValue(
   variableName: string,
 ) {
@@ -107,11 +97,50 @@ function hasPagoTicPlatformCredentials() {
   );
 }
 
-export async function updatePaymentProvider(
-  provider: PaymentProvider,
-  formData: FormData,
-): Promise<void> {
-  const context = await getAdminContext();
+async function getPagoTicConfiguration(
+  organizationId: string,
+  clubId: string,
+) {
+  const supabase =
+    createAdminClient();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("club_payment_providers")
+    .select(`
+      id,
+      mode,
+      monthly_fees_enabled,
+      one_time_enabled,
+      automatic_debit_enabled,
+      merchant_account_id,
+      external_entity_id,
+      connection_status
+    `)
+    .eq(
+      "organization_id",
+      organizationId,
+    )
+    .eq("club_id", clubId)
+    .eq("provider", "pagotic")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `No fue posible consultar Pago TIC: ${error.message}`,
+    );
+  }
+
+  return data as
+    | PagoTicConfiguration
+    | null;
+}
+
+export async function startPagoTicSetup(): Promise<void> {
+  const context =
+    await getAdminContext();
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -120,10 +149,115 @@ export async function updatePaymentProvider(
     );
   }
 
-  if (!validProviders.has(provider)) {
+  const supabase =
+    createAdminClient();
+
+  const current =
+    await getPagoTicConfiguration(
+      context.organizationId,
+      context.clubId,
+    );
+
+  const now =
+    new Date().toISOString();
+
+  if (current) {
+    const { error } = await supabase
+      .from("club_payment_providers")
+      .update({
+        connection_status:
+          "pending",
+
+        onboarding_started_at:
+          now,
+
+        enabled: false,
+
+        default_for_monthly_fees:
+          false,
+
+        default_for_one_time:
+          false,
+
+        last_connection_error:
+          null,
+
+        updated_at: now,
+      })
+      .eq("id", current.id);
+
+    if (error) {
+      redirectWithMessage(
+        "error",
+        `No fue posible iniciar la configuración: ${error.message}`,
+      );
+    }
+  } else {
+    const { error } = await supabase
+      .from("club_payment_providers")
+      .insert({
+        organization_id:
+          context.organizationId,
+
+        club_id:
+          context.clubId,
+
+        provider: "pagotic",
+        enabled: false,
+        mode: "sandbox",
+
+        monthly_fees_enabled:
+          false,
+
+        one_time_enabled:
+          false,
+
+        automatic_debit_enabled:
+          false,
+
+        default_for_monthly_fees:
+          false,
+
+        default_for_one_time:
+          false,
+
+        connection_status:
+          "pending",
+
+        onboarding_started_at:
+          now,
+
+        updated_at: now,
+      });
+
+    if (error) {
+      redirectWithMessage(
+        "error",
+        `No fue posible iniciar la configuración: ${error.message}`,
+      );
+    }
+  }
+
+  revalidatePath(
+    "/panel/pagos/configuracion",
+  );
+
+  redirectWithMessage(
+    "success",
+    "Se inició la configuración de Pago TIC. El administrador ya puede cargar los datos entregados al club.",
+  );
+}
+
+export async function savePagoTicSetup(
+  formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (!canManagePayments(context.role)) {
     redirectWithMessage(
       "error",
-      "El proveedor indicado no es válido.",
+      "Tu usuario no tiene permisos para configurar los medios de pago.",
     );
   }
 
@@ -142,190 +276,207 @@ export async function updatePaymentProvider(
     );
   }
 
-  const enabled = readBoolean(
-    formData,
-    "enabled",
-  );
+  const collectorId =
+    readText(
+      formData,
+      "merchant_account_id",
+    );
 
-  let monthlyFeesEnabled =
+  const externalEntityId =
+    readText(
+      formData,
+      "external_entity_id",
+    );
+
+  const monthlyFeesEnabled =
     readBoolean(
       formData,
       "monthly_fees_enabled",
     );
 
-  let oneTimeEnabled =
-    readBoolean(
-      formData,
-      "one_time_enabled",
-    );
-
-  let automaticDebitEnabled =
+  const automaticDebitEnabled =
     readBoolean(
       formData,
       "automatic_debit_enabled",
     );
 
-  const merchantAccountId =
-    readText(
+  const oneTimeEnabled =
+    readBoolean(
       formData,
-      "merchant_account_id",
-    ) || null;
+      "one_time_enabled",
+    );
 
-  /*
-   * Mercado Pago queda postergado hasta que
-   * implementemos OAuth por club. Nunca debe
-   * utilizarse un access token global para
-   * cobrar operaciones de clubes diferentes.
-   */
-  if (
-    provider === "mercado_pago"
-  ) {
-    if (
-      enabled ||
-      monthlyFeesEnabled ||
-      oneTimeEnabled ||
-      automaticDebitEnabled
-    ) {
-      redirectWithMessage(
-        "error",
-        "Mercado Pago permanecerá deshabilitado hasta implementar la conexión individual de cada club.",
-      );
-    }
+  const providerApproved =
+    readBoolean(
+      formData,
+      "provider_approved",
+    );
 
-    monthlyFeesEnabled = false;
-    oneTimeEnabled = false;
-    automaticDebitEnabled = false;
+  if (!collectorId) {
+    redirectWithMessage(
+      "error",
+      "Ingresá el Collector ID entregado por Pago TIC al club.",
+    );
   }
 
-  if (provider === "pagotic") {
-    if (
-      automaticDebitEnabled &&
-      !monthlyFeesEnabled
-    ) {
-      redirectWithMessage(
-        "error",
-        "Para habilitar el débito automático también deben estar habilitadas las cuotas mensuales.",
-      );
-    }
+  if (
+    automaticDebitEnabled &&
+    !monthlyFeesEnabled
+  ) {
+    redirectWithMessage(
+      "error",
+      "Para habilitar el débito automático también deben habilitarse las cuotas mensuales.",
+    );
+  }
 
-    if (
-      enabled &&
-      !merchantAccountId
-    ) {
-      redirectWithMessage(
-        "error",
-        "Ingresá el Collector ID asignado por Pago TIC al club.",
-      );
-    }
-
-    if (
-      enabled &&
-      !hasPagoTicPlatformCredentials()
-    ) {
-      redirectWithMessage(
-        "error",
-        "La integración general de ClubSmart con Pago TIC todavía no tiene credenciales válidas en el servidor.",
-      );
-    }
+  if (
+    providerApproved &&
+    !hasPagoTicPlatformCredentials()
+  ) {
+    redirectWithMessage(
+      "error",
+      "El conector técnico de Pago TIC todavía no está disponible en el servidor. Los datos del club pueden guardarse, pero no puede activarse la conexión.",
+    );
   }
 
   const supabase =
     createAdminClient();
 
-  const {
-    data: currentConfiguration,
-    error: configurationError,
-  } = await supabase
-    .from("club_payment_providers")
-    .select(`
-      id,
-      default_for_monthly_fees,
-      default_for_one_time
-    `)
-    .eq(
-      "organization_id",
+  const current =
+    await getPagoTicConfiguration(
       context.organizationId,
-    )
-    .eq("club_id", context.clubId)
-    .eq("provider", provider)
-    .maybeSingle();
-
-  if (configurationError) {
-    redirectWithMessage(
-      "error",
-      `No fue posible consultar la configuración: ${configurationError.message}`,
+      context.clubId,
     );
+
+  const now =
+    new Date().toISOString();
+
+  const connectionStatus:
+    ConnectionStatus =
+      providerApproved
+        ? "active"
+        : "pending";
+
+  const enabled =
+    connectionStatus === "active";
+
+  /*
+   * Pago TIC será el único proveedor
+   * predeterminado para mensualidades
+   * cuando la conexión esté activa.
+   */
+  if (
+    enabled &&
+    monthlyFeesEnabled
+  ) {
+    const { error } = await supabase
+      .from("club_payment_providers")
+      .update({
+        default_for_monthly_fees:
+          false,
+
+        updated_at: now,
+      })
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq("club_id", context.clubId);
+
+    if (error) {
+      redirectWithMessage(
+        "error",
+        `No fue posible actualizar el proveedor predeterminado: ${error.message}`,
+      );
+    }
   }
 
-  const defaultForMonthlyFees =
-    enabled && monthlyFeesEnabled
-      ? (
-          currentConfiguration
-            ?.default_for_monthly_fees ??
-          false
-        )
-      : false;
+  const payload = {
+    organization_id:
+      context.organizationId,
 
-  const defaultForOneTime =
-    enabled && oneTimeEnabled
-      ? (
-          currentConfiguration
-            ?.default_for_one_time ??
-          false
-        )
-      : false;
+    club_id:
+      context.clubId,
 
-  const { error: saveError } =
-    await supabase
+    provider: "pagotic" as const,
+
+    mode,
+
+    merchant_account_id:
+      collectorId,
+
+    external_entity_id:
+      externalEntityId || null,
+
+    monthly_fees_enabled:
+      monthlyFeesEnabled,
+
+    automatic_debit_enabled:
+      automaticDebitEnabled,
+
+    one_time_enabled:
+      oneTimeEnabled,
+
+    connection_status:
+      connectionStatus,
+
+    enabled,
+
+    default_for_monthly_fees:
+      enabled &&
+      monthlyFeesEnabled,
+
+    default_for_one_time:
+      false,
+
+    onboarding_started_at:
+      current
+        ? undefined
+        : now,
+
+    connected_at:
+      enabled
+        ? now
+        : null,
+
+    last_connection_error:
+      null,
+
+    updated_at: now,
+  };
+
+  let saveError:
+    | { message: string }
+    | null = null;
+
+  if (current) {
+    const {
+      error,
+    } = await supabase
       .from("club_payment_providers")
-      .upsert(
-        {
-          organization_id:
-            context.organizationId,
+      .update(payload)
+      .eq("id", current.id);
 
-          club_id: context.clubId,
-          provider,
-          enabled,
-          mode,
+    saveError = error;
+  } else {
+    const {
+      error,
+    } = await supabase
+      .from("club_payment_providers")
+      .insert({
+        ...payload,
 
-          monthly_fees_enabled:
-            monthlyFeesEnabled,
+        onboarding_started_at:
+          now,
+      });
 
-          one_time_enabled:
-            oneTimeEnabled,
-
-          automatic_debit_enabled:
-            automaticDebitEnabled,
-
-          default_for_monthly_fees:
-            defaultForMonthlyFees,
-
-          default_for_one_time:
-            defaultForOneTime,
-
-          /*
-           * Para Pago TIC representa el
-           * Collector ID propio del club.
-           * Nunca contiene contraseñas.
-           */
-          merchant_account_id:
-            merchantAccountId,
-
-          updated_at:
-            new Date().toISOString(),
-        },
-        {
-          onConflict:
-            "organization_id,club_id,provider",
-        },
-      );
+    saveError = error;
+  }
 
   if (saveError) {
     redirectWithMessage(
       "error",
-      `No fue posible guardar la configuración de ${providerName(
-        provider,
-      )}: ${saveError.message}`,
+      `No fue posible guardar Pago TIC: ${saveError.message}`,
     );
   }
 
@@ -335,173 +486,47 @@ export async function updatePaymentProvider(
 
   redirectWithMessage(
     "success",
-    `La configuración de ${providerName(
-      provider,
-    )} fue actualizada.`,
+    enabled
+      ? "Pago TIC quedó activo para este club."
+      : "Los datos fueron guardados. La conexión permanecerá pendiente hasta que Pago TIC confirme el alta.",
   );
 }
 
-export async function updateDefaultProviders(
-  formData: FormData,
-): Promise<void> {
-  const context = await getAdminContext();
+export async function suspendPagoTic(): Promise<void> {
+  const context =
+    await getAdminContext();
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
       "error",
-      "Tu usuario no tiene permisos para configurar los medios de pago.",
+      "Tu usuario no tiene permisos para suspender Pago TIC.",
     );
   }
 
-  const monthlyProviderText =
-    readText(
-      formData,
-      "monthly_provider",
+  const current =
+    await getPagoTicConfiguration(
+      context.organizationId,
+      context.clubId,
     );
 
-  const oneTimeProviderText =
-    readText(
-      formData,
-      "one_time_provider",
-    );
-
-  const monthlyProvider =
-    monthlyProviderText === ""
-      ? null
-      : monthlyProviderText as PaymentProvider;
-
-  const oneTimeProvider =
-    oneTimeProviderText === ""
-      ? null
-      : oneTimeProviderText as PaymentProvider;
-
-  if (
-    monthlyProvider !== null &&
-    monthlyProvider !== "pagotic"
-  ) {
+  if (!current) {
     redirectWithMessage(
       "error",
-      "Pago TIC es el único proveedor habilitado actualmente para mensualidades.",
-    );
-  }
-
-  if (
-    oneTimeProvider !== null &&
-    !validProviders.has(oneTimeProvider)
-  ) {
-    redirectWithMessage(
-      "error",
-      "El proveedor seleccionado para pagos puntuales no es válido.",
-    );
-  }
-
-  if (
-    oneTimeProvider ===
-    "mercado_pago"
-  ) {
-    redirectWithMessage(
-      "error",
-      "Mercado Pago todavía no puede seleccionarse porque falta implementar la conexión individual por club.",
+      "El club todavía no configuró Pago TIC.",
     );
   }
 
   const supabase =
     createAdminClient();
 
-  const {
-    data: configurationsData,
-    error: configurationsError,
-  } = await supabase
-    .from("club_payment_providers")
-    .select(`
-      id,
-      provider,
-      enabled,
-      monthly_fees_enabled,
-      one_time_enabled,
-      automatic_debit_enabled,
-      merchant_account_id
-    `)
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq("club_id", context.clubId);
-
-  if (configurationsError) {
-    redirectWithMessage(
-      "error",
-      `No fue posible consultar los proveedores: ${configurationsError.message}`,
-    );
-  }
-
-  const configurations =
-    (
-      configurationsData ?? []
-    ) as ProviderConfiguration[];
-
-  const configurationByProvider =
-    new Map(
-      configurations.map(
-        (configuration) => [
-          configuration.provider,
-          configuration,
-        ],
-      ),
-    );
-
-  if (monthlyProvider) {
-    const configuration =
-      configurationByProvider.get(
-        monthlyProvider,
-      );
-
-    if (
-      !configuration ||
-      !configuration.enabled ||
-      !configuration
-        .monthly_fees_enabled ||
-      !configuration
-        .automatic_debit_enabled ||
-      !configuration
-        .merchant_account_id
-    ) {
-      redirectWithMessage(
-        "error",
-        "Pago TIC debe estar habilitado, vinculado al club y configurado para cuotas y débito automático.",
-      );
-    }
-  }
-
-  if (oneTimeProvider) {
-    const configuration =
-      configurationByProvider.get(
-        oneTimeProvider,
-      );
-
-    if (
-      !configuration ||
-      !configuration.enabled ||
-      !configuration.one_time_enabled
-    ) {
-      redirectWithMessage(
-        "error",
-        "El proveedor de pagos puntuales debe estar habilitado y aceptar pagos únicos.",
-      );
-    }
-  }
-
-  /*
-   * Primero quitamos los predeterminados.
-   * Luego marcamos las filas seleccionadas.
-   * Así evitamos conflictos con los índices
-   * únicos de la base.
-   */
-  const {
-    error: clearDefaultsError,
-  } = await supabase
+  const { error } = await supabase
     .from("club_payment_providers")
     .update({
+      enabled: false,
+
+      connection_status:
+        "suspended",
+
       default_for_monthly_fees:
         false,
 
@@ -511,77 +536,13 @@ export async function updateDefaultProviders(
       updated_at:
         new Date().toISOString(),
     })
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq("club_id", context.clubId);
+    .eq("id", current.id);
 
-  if (clearDefaultsError) {
+  if (error) {
     redirectWithMessage(
       "error",
-      `No fue posible limpiar los proveedores predeterminados: ${clearDefaultsError.message}`,
+      `No fue posible suspender Pago TIC: ${error.message}`,
     );
-  }
-
-  if (monthlyProvider) {
-    const {
-      error: monthlyUpdateError,
-    } = await supabase
-      .from("club_payment_providers")
-      .update({
-        default_for_monthly_fees:
-          true,
-
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "organization_id",
-        context.organizationId,
-      )
-      .eq("club_id", context.clubId)
-      .eq(
-        "provider",
-        monthlyProvider,
-      );
-
-    if (monthlyUpdateError) {
-      redirectWithMessage(
-        "error",
-        `No fue posible definir el proveedor de mensualidades: ${monthlyUpdateError.message}`,
-      );
-    }
-  }
-
-  if (oneTimeProvider) {
-    const {
-      error: oneTimeUpdateError,
-    } = await supabase
-      .from("club_payment_providers")
-      .update({
-        default_for_one_time:
-          true,
-
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "organization_id",
-        context.organizationId,
-      )
-      .eq("club_id", context.clubId)
-      .eq(
-        "provider",
-        oneTimeProvider,
-      );
-
-    if (oneTimeUpdateError) {
-      redirectWithMessage(
-        "error",
-        `No fue posible definir el proveedor de pagos puntuales: ${oneTimeUpdateError.message}`,
-      );
-    }
   }
 
   revalidatePath(
@@ -590,6 +551,86 @@ export async function updateDefaultProviders(
 
   redirectWithMessage(
     "success",
-    "Los proveedores predeterminados fueron actualizados.",
+    "Pago TIC fue suspendido para este club. No se generarán nuevos cobros automáticos.",
+  );
+}
+
+export async function reactivatePagoTic(): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (!canManagePayments(context.role)) {
+    redirectWithMessage(
+      "error",
+      "Tu usuario no tiene permisos para reactivar Pago TIC.",
+    );
+  }
+
+  const current =
+    await getPagoTicConfiguration(
+      context.organizationId,
+      context.clubId,
+    );
+
+  if (!current) {
+    redirectWithMessage(
+      "error",
+      "El club todavía no configuró Pago TIC.",
+    );
+  }
+
+  if (!current.merchant_account_id) {
+    redirectWithMessage(
+      "error",
+      "Ingresá el Collector ID antes de reactivar Pago TIC.",
+    );
+  }
+
+  if (!hasPagoTicPlatformCredentials()) {
+    redirectWithMessage(
+      "error",
+      "El conector técnico de Pago TIC todavía no está disponible en el servidor.",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const { error } = await supabase
+    .from("club_payment_providers")
+    .update({
+      enabled: true,
+
+      connection_status:
+        "active",
+
+      default_for_monthly_fees:
+        current.monthly_fees_enabled,
+
+      connected_at:
+        new Date().toISOString(),
+
+      last_connection_error:
+        null,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", current.id);
+
+  if (error) {
+    redirectWithMessage(
+      "error",
+      `No fue posible reactivar Pago TIC: ${error.message}`,
+    );
+  }
+
+  revalidatePath(
+    "/panel/pagos/configuracion",
+  );
+
+  redirectWithMessage(
+    "success",
+    "Pago TIC volvió a quedar activo para este club.",
   );
 }
