@@ -1124,3 +1124,616 @@ export async function cancelPaymentBatch(
     batchId,
   );
 }
+
+export async function refreshPaymentBatch(
+  batchId: string,
+  year: number,
+  month: number,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManagePayments(
+      context.role,
+    )
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Tu usuario no tiene permisos para actualizar lotes.",
+      batchId,
+    );
+  }
+
+  if (!isUuid(batchId)) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote indicado no es válido.",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: batch,
+    error: batchError,
+  } = await supabase
+    .from("payment_batches")
+    .select(`
+      id,
+      organization_id,
+      club_id,
+      provider_configuration_id,
+      provider,
+      status,
+      year,
+      month
+    `)
+    .eq("id", batchId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
+
+  if (
+    batchError ||
+    !batch
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote no existe o no pertenece a este club.",
+    );
+  }
+
+  if (
+    batch.status !== "draft"
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Solamente pueden actualizarse los lotes en borrador.",
+      batchId,
+    );
+  }
+
+  const [
+    itemsResult,
+    configurationResult,
+  ] = await Promise.all([
+    supabase
+      .from(
+        "payment_batch_items",
+      )
+      .select(`
+        id,
+        batch_id,
+        organization_id,
+        club_id,
+        monthly_fee_id,
+        payment_subscription_id,
+        member_id,
+        activity_id,
+        member_name,
+        member_dni,
+        activity_name,
+        fee_year,
+        fee_month,
+        due_date,
+        fee_amount,
+        paid_amount,
+        amount,
+        status,
+        block_reason,
+        external_reference,
+        provider_payment_id,
+        provider_status,
+        error_message,
+        sent_at,
+        processed_at,
+        created_at,
+        updated_at
+      `)
+      .eq(
+        "batch_id",
+        batch.id,
+      )
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      ),
+
+    supabase
+      .from(
+        "club_payment_providers",
+      )
+      .select(`
+        id,
+        enabled,
+        connection_status,
+        automatic_debit_enabled,
+        merchant_account_id
+      `)
+      .eq(
+        "id",
+        batch.provider_configuration_id,
+      )
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      )
+      .eq(
+        "provider",
+        "pagotic",
+      )
+      .maybeSingle(),
+  ]);
+
+  if (itemsResult.error) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `No fue posible cargar las cuotas del lote: ${itemsResult.error.message}`,
+      batchId,
+    );
+  }
+
+  if (
+    configurationResult.error
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `No fue posible revisar la configuración de Pago TIC: ${configurationResult.error.message}`,
+      batchId,
+    );
+  }
+
+  const items =
+    itemsResult.data ?? [];
+
+  if (items.length === 0) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote no contiene cuotas.",
+      batchId,
+    );
+  }
+
+  const feeIds =
+    items.map(
+      (item) =>
+        item.monthly_fee_id,
+    );
+
+  const memberIds =
+    Array.from(
+      new Set(
+        items.map(
+          (item) =>
+            item.member_id,
+        ),
+      ),
+    );
+
+  const activityIds =
+    Array.from(
+      new Set(
+        items.map(
+          (item) =>
+            item.activity_id,
+        ),
+      ),
+    );
+
+  const [
+    feesResult,
+    subscriptionsResult,
+  ] = await Promise.all([
+    supabase
+      .from("monthly_fees")
+      .select(`
+        id,
+        member_id,
+        activity_id,
+        year,
+        month,
+        amount,
+        paid_amount,
+        status,
+        due_date
+      `)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      )
+      .in("id", feeIds),
+
+    supabase
+      .from(
+        "payment_subscriptions",
+      )
+      .select(`
+        id,
+        member_id,
+        activity_id,
+        status
+      `)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      )
+      .eq(
+        "provider",
+        "pagotic",
+      )
+      .eq(
+        "provider_configuration_id",
+        batch.provider_configuration_id,
+      )
+      .eq(
+        "status",
+        "active",
+      )
+      .in(
+        "member_id",
+        memberIds,
+      )
+      .in(
+        "activity_id",
+        activityIds,
+      ),
+  ]);
+
+  if (feesResult.error) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `No fue posible volver a consultar las cuotas: ${feesResult.error.message}`,
+      batchId,
+    );
+  }
+
+  if (
+    subscriptionsResult.error
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `No fue posible volver a consultar las adhesiones: ${subscriptionsResult.error.message}`,
+      batchId,
+    );
+  }
+
+  const feeById =
+    new Map(
+      (
+        feesResult.data ?? []
+      ).map((fee) => [
+        fee.id,
+        fee,
+      ]),
+    );
+
+  const subscriptionByRelation =
+    new Map<
+      string,
+      {
+        id: string;
+        member_id: string;
+        activity_id: string;
+        status: string;
+      }
+    >();
+
+  for (
+    const subscription of
+      subscriptionsResult.data ??
+      []
+  ) {
+    const key =
+      `${subscription.member_id}:${subscription.activity_id}`;
+
+    if (
+      !subscriptionByRelation.has(
+        key,
+      )
+    ) {
+      subscriptionByRelation.set(
+        key,
+        subscription,
+      );
+    }
+  }
+
+  const configuration =
+    configurationResult.data;
+
+  const configurationReady =
+    Boolean(
+      configuration?.enabled &&
+        configuration
+          .connection_status ===
+          "active" &&
+        configuration
+          .automatic_debit_enabled &&
+        configuration
+          .merchant_account_id,
+    );
+
+  const now =
+    new Date().toISOString();
+
+  const refreshedItems =
+    items.map((item) => {
+      const fee =
+        feeById.get(
+          item.monthly_fee_id,
+        );
+
+      if (!fee) {
+        return {
+          ...item,
+
+          payment_subscription_id:
+            null,
+
+          status: "blocked",
+
+          block_reason:
+            "La cuota ya no se encuentra disponible.",
+
+          updated_at: now,
+        };
+      }
+
+      const feeAmount =
+        Number(fee.amount);
+
+      const paidAmount =
+        Number(
+          fee.paid_amount,
+        );
+
+      const remainingAmount =
+        Math.max(
+          feeAmount -
+            paidAmount,
+          0,
+        );
+
+      const relationKey =
+        `${fee.member_id}:${fee.activity_id}`;
+
+      const subscription =
+        subscriptionByRelation.get(
+          relationKey,
+        );
+
+      let blockReason:
+        | string
+        | null = null;
+
+      if (
+        ![
+          "pending",
+          "partial",
+          "overdue",
+        ].includes(
+          fee.status,
+        )
+      ) {
+        blockReason =
+          fee.status === "paid"
+            ? "La cuota ya fue pagada."
+            : "El estado actual de la cuota no permite cobrarla.";
+      } else if (
+        !Number.isFinite(
+          remainingAmount,
+        ) ||
+        remainingAmount <= 0
+      ) {
+        blockReason =
+          "La cuota ya no tiene saldo pendiente.";
+      } else if (
+        !subscription
+      ) {
+        blockReason =
+          "La persona no tiene una adhesión activa para esta actividad.";
+      } else if (
+        !configurationReady
+      ) {
+        blockReason =
+          "La conexión de Pago TIC todavía no está habilitada para cobros.";
+      }
+
+      return {
+        ...item,
+
+        payment_subscription_id:
+          subscription?.id ??
+          null,
+
+        fee_year: fee.year,
+        fee_month: fee.month,
+
+        due_date:
+          fee.due_date,
+
+        fee_amount:
+          Number.isFinite(
+            feeAmount,
+          )
+            ? feeAmount
+            : 0,
+
+        paid_amount:
+          Number.isFinite(
+            paidAmount,
+          )
+            ? paidAmount
+            : 0,
+
+        amount:
+          Number.isFinite(
+            remainingAmount,
+          )
+            ? remainingAmount
+            : 0,
+
+        status: blockReason
+          ? "blocked"
+          : "ready",
+
+        block_reason:
+          blockReason,
+
+        error_message: null,
+
+        updated_at: now,
+      };
+    });
+
+  const readyItems =
+    refreshedItems.filter(
+      (item) =>
+        item.status ===
+        "ready",
+    );
+
+  const blockedItems =
+    refreshedItems.filter(
+      (item) =>
+        item.status ===
+        "blocked",
+    );
+
+  const totalAmount =
+    refreshedItems.reduce(
+      (total, item) =>
+        total +
+        Number(item.amount),
+      0,
+    );
+
+  const readyAmount =
+    readyItems.reduce(
+      (total, item) =>
+        total +
+        Number(item.amount),
+      0,
+    );
+
+  const {
+    error: updateItemsError,
+  } = await supabase
+    .from(
+      "payment_batch_items",
+    )
+    .upsert(
+      refreshedItems,
+      {
+        onConflict: "id",
+      },
+    );
+
+  if (updateItemsError) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `No fue posible actualizar las cuotas del lote: ${updateItemsError.message}`,
+      batchId,
+    );
+  }
+
+  const {
+    error: updateBatchError,
+  } = await supabase
+    .from("payment_batches")
+    .update({
+      total_items:
+        refreshedItems.length,
+
+      ready_items:
+        readyItems.length,
+
+      blocked_items:
+        blockedItems.length,
+
+      total_amount:
+        totalAmount,
+
+      ready_amount:
+        readyAmount,
+
+      updated_at: now,
+    })
+    .eq("id", batch.id)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .eq(
+      "status",
+      "draft",
+    );
+
+  if (updateBatchError) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `Las cuotas se actualizaron, pero no fue posible recalcular el lote: ${updateBatchError.message}`,
+      batchId,
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirectWithMessage(
+    year,
+    month,
+    "success",
+    `Lote actualizado: ${readyItems.length} cuotas preparadas y ${blockedItems.length} bloqueadas.`,
+    batch.id,
+  );
+}
