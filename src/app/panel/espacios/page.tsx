@@ -19,6 +19,7 @@ type Availability = {
   day_of_week: number;
   start_time: string;
   end_time: string;
+  ends_next_day: boolean;
 };
 
 type ClubSpace = {
@@ -76,6 +77,38 @@ function formatMoney(value: number | string) {
   }).format(amount);
 }
 
+function formatDeposit(
+  space: ClubSpace,
+) {
+  if (!space.requires_deposit) {
+    return null;
+  }
+
+  const value = Number(
+    space.deposit_value,
+  );
+
+  if (
+    space.deposit_type ===
+    "percentage"
+  ) {
+    return `${new Intl.NumberFormat(
+      "es-AR",
+      {
+        maximumFractionDigits: 2,
+      },
+    ).format(value)} %`;
+  }
+
+  if (
+    space.deposit_type === "fixed"
+  ) {
+    return formatMoney(value);
+  }
+
+  return null;
+}
+
 function formatTime(value: string) {
   return value.slice(0, 5);
 }
@@ -89,20 +122,33 @@ function formatAvailability(
 
   return [...rows]
     .sort((first, second) => {
-      if (first.day_of_week !== second.day_of_week) {
-        return first.day_of_week - second.day_of_week;
+      if (
+        first.day_of_week !==
+        second.day_of_week
+      ) {
+        return (
+          first.day_of_week -
+          second.day_of_week
+        );
       }
 
       return first.start_time.localeCompare(
         second.start_time,
       );
     })
-    .map(
-      (row) =>
-        `${dayNames[row.day_of_week]} ${formatTime(
-          row.start_time,
-        )}–${formatTime(row.end_time)}`,
-    );
+    .map((row) => {
+      const nextDayLabel =
+        row.ends_next_day
+          ? " · día siguiente"
+          : "";
+
+      return (
+        `${dayNames[row.day_of_week]} ` +
+        `${formatTime(row.start_time)}–` +
+        `${formatTime(row.end_time)}` +
+        nextDayLabel
+      );
+    });
 }
 
 export default async function SpacesPage({
@@ -143,11 +189,12 @@ export default async function SpacesPage({
       display_order,
 
       space_availability (
-        id,
-        day_of_week,
-        start_time,
-        end_time
-      )
+  id,
+  day_of_week,
+  start_time,
+  end_time,
+  ends_next_day
+)
     `)
     .eq(
       "organization_id",
@@ -272,11 +319,23 @@ export default async function SpacesPage({
         <section className="mt-8 grid gap-5 lg:grid-cols-2">
           {spaces.map((space) => {
             const availability =
-              formatAvailability(
-                space.space_availability,
-              );
+  formatAvailability(
+    space.space_availability,
+  );
 
-            return (
+const deposit =
+  formatDeposit(space);
+
+const numericPrice =
+  Number(space.price);
+
+const hasPrice =
+  Number.isFinite(
+    numericPrice,
+  ) &&
+  numericPrice > 0;
+
+return (
               <article
                 key={space.id}
                 className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -320,60 +379,91 @@ export default async function SpacesPage({
                     ) : null}
                   </div>
 
-                  <p className="text-right font-bold text-slate-900">
-                    {formatMoney(space.price)}
-                  </p>
+                  {hasPrice ||
+space.price_description ? (
+  <div className="text-right">
+    {hasPrice ? (
+      <p className="font-bold text-slate-900">
+        {formatMoney(
+          space.price,
+        )}
+      </p>
+    ) : null}
+
+    {space.price_description ? (
+      <p className="mt-1 max-w-40 text-xs leading-5 text-slate-500">
+        {
+          space.price_description
+        }
+      </p>
+    ) : null}
+  </div>
+) : null}
                 </div>
 
                 <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <dt className="text-slate-500">
-                      Ubicación
-                    </dt>
+  {space.location ? (
+    <div>
+      <dt className="text-slate-500">
+        Ubicación
+      </dt>
 
-                    <dd className="mt-1 font-medium text-slate-900">
-                      {space.location ?? "—"}
-                    </dd>
-                  </div>
+      <dd className="mt-1 font-medium text-slate-900">
+        {space.location}
+      </dd>
+    </div>
+  ) : null}
 
-                  <div>
-                    <dt className="text-slate-500">
-                      Capacidad
-                    </dt>
+  {space.capacity ? (
+    <div>
+      <dt className="text-slate-500">
+        Capacidad
+      </dt>
 
-                    <dd className="mt-1 font-medium text-slate-900">
-                      {space.capacity
-                        ? `${space.capacity} personas`
-                        : "Sin especificar"}
-                    </dd>
-                  </div>
+      <dd className="mt-1 font-medium text-slate-900">
+        {space.capacity} personas
+      </dd>
+    </div>
+  ) : null}
 
-                  <div>
-                    <dt className="text-slate-500">
-                      Duración mínima
-                    </dt>
+  <div>
+    <dt className="text-slate-500">
+      Duración mínima
+    </dt>
 
-                    <dd className="mt-1 font-medium text-slate-900">
-                      {
-                        space.minimum_reservation_minutes
-                      }{" "}
-                      minutos
-                    </dd>
-                  </div>
+    <dd className="mt-1 font-medium text-slate-900">
+      {
+        space.minimum_reservation_minutes
+      }{" "}
+      minutos
+    </dd>
+  </div>
 
-                  <div>
-                    <dt className="text-slate-500">
-                      Confirmación
-                    </dt>
+  <div>
+    <dt className="text-slate-500">
+      Confirmación
+    </dt>
 
-                    <dd className="mt-1 font-medium text-slate-900">
-                      {space.confirmation_mode ===
-                      "automatic"
-                        ? "Automática"
-                        : "Manual"}
-                    </dd>
-                  </div>
-                </dl>
+    <dd className="mt-1 font-medium text-slate-900">
+      {space.confirmation_mode ===
+      "automatic"
+        ? "Automática"
+        : "Manual"}
+    </dd>
+  </div>
+
+  {deposit ? (
+    <div>
+      <dt className="text-slate-500">
+        Seña
+      </dt>
+
+      <dd className="mt-1 font-medium text-slate-900">
+        {deposit}
+      </dd>
+    </div>
+  ) : null}
+</dl>
 
                 <div className="mt-6">
                   <p className="text-sm font-semibold text-slate-800">

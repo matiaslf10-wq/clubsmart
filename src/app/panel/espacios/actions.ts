@@ -10,6 +10,7 @@ type AvailabilityInput = {
   day_of_week: number;
   start_time: string;
   end_time: string;
+  ends_next_day: boolean;
   location: string;
   notes: string;
 };
@@ -148,8 +149,8 @@ function parseAvailability(formData: FormData) {
     );
   }
 
-  const result: AvailabilityInput[] = parsedValue.map(
-    (item) => {
+  const result: AvailabilityInput[] =
+    parsedValue.map((item) => {
       if (
         typeof item !== "object" ||
         item === null ||
@@ -160,9 +161,12 @@ function parseAvailability(formData: FormData) {
         );
       }
 
-      const record = item as Record<string, unknown>;
+      const record =
+        item as Record<string, unknown>;
 
-      const dayOfWeek = Number(record.day_of_week);
+      const dayOfWeek = Number(
+        record.day_of_week,
+      );
 
       const startTime =
         typeof record.start_time === "string"
@@ -184,8 +188,11 @@ function parseAvailability(formData: FormData) {
           ? record.notes.trim()
           : "";
 
-      const startMinutes = timeToMinutes(startTime);
-      const endMinutes = timeToMinutes(endTime);
+      const startMinutes =
+        timeToMinutes(startTime);
+
+      const endMinutes =
+        timeToMinutes(endTime);
 
       if (
         !Number.isInteger(dayOfWeek) ||
@@ -199,11 +206,16 @@ function parseAvailability(formData: FormData) {
 
       if (
         startMinutes === null ||
-        endMinutes === null ||
-        startMinutes >= endMinutes
+        endMinutes === null
       ) {
         throw new Error(
-          "Todos los horarios deben tener una hora de inicio anterior a la hora de finalización.",
+          "Uno de los horarios no tiene una hora válida.",
+        );
+      }
+
+      if (startMinutes === endMinutes) {
+        throw new Error(
+          "La hora de inicio y de finalización no pueden ser iguales.",
         );
       }
 
@@ -211,63 +223,127 @@ function parseAvailability(formData: FormData) {
         day_of_week: dayOfWeek,
         start_time: startTime,
         end_time: endTime,
+
+        ends_next_day:
+          endMinutes < startMinutes,
+
         location,
         notes,
+      };
+    });
+
+  /*
+   * Convertimos los horarios en minutos de una
+   * semana completa. De esta forma podemos detectar
+   * superposiciones incluso cuando un turno cruza
+   * la medianoche.
+   */
+  const minutesPerDay = 1440;
+  const minutesPerWeek = 7 * minutesPerDay;
+
+  const normalizedIntervals = result.map(
+    (availability, index) => {
+      const startMinutes =
+        timeToMinutes(
+          availability.start_time,
+        ) ?? 0;
+
+      const endMinutes =
+        timeToMinutes(
+          availability.end_time,
+        ) ?? 0;
+
+      const dayStart =
+        (availability.day_of_week - 1) *
+        minutesPerDay;
+
+      return {
+        index,
+
+        start:
+          dayStart + startMinutes,
+
+        end:
+          dayStart +
+          endMinutes +
+          (availability.ends_next_day
+            ? minutesPerDay
+            : 0),
       };
     },
   );
 
-  const groupedByDay = new Map<
-    number,
-    AvailabilityInput[]
-  >();
+  /*
+   * Duplicamos los horarios una semana después
+   * para detectar casos como:
+   *
+   * Domingo 23:00–02:00
+   * Lunes   01:00–03:00
+   */
+  const expandedIntervals = [
+    ...normalizedIntervals,
 
-  for (const availability of result) {
-    const rows =
-      groupedByDay.get(availability.day_of_week) ?? [];
+    ...normalizedIntervals.map(
+      (interval) => ({
+        ...interval,
+        start:
+          interval.start +
+          minutesPerWeek,
 
-    rows.push(availability);
+        end:
+          interval.end +
+          minutesPerWeek,
+      }),
+    ),
+  ];
 
-    groupedByDay.set(
-      availability.day_of_week,
-      rows,
-    );
-  }
-
-  for (const rows of groupedByDay.values()) {
-    const sortedRows = [...rows].sort((first, second) => {
-      return (
-        (timeToMinutes(first.start_time) ?? 0) -
-        (timeToMinutes(second.start_time) ?? 0)
-      );
-    });
-
+  for (
+    const current of normalizedIntervals
+  ) {
     for (
-      let index = 1;
-      index < sortedRows.length;
-      index += 1
+      const candidate of expandedIntervals
     ) {
-      const previousEnd =
-        timeToMinutes(sortedRows[index - 1].end_time) ?? 0;
+      const sameOriginalInterval =
+        current.index ===
+          candidate.index &&
+        current.start ===
+          candidate.start;
 
-      const currentStart =
-        timeToMinutes(sortedRows[index].start_time) ?? 0;
+      if (sameOriginalInterval) {
+        continue;
+      }
 
-      if (currentStart < previousEnd) {
+      const overlaps =
+        current.start <
+          candidate.end &&
+        candidate.start <
+          current.end;
+
+      if (overlaps) {
         throw new Error(
-          "Hay horarios superpuestos dentro del mismo día.",
+          "Hay horarios superpuestos. Revisá también los turnos que continúan después de la medianoche.",
         );
       }
     }
   }
 
-  return result.sort((first, second) => {
-    if (first.day_of_week !== second.day_of_week) {
-      return first.day_of_week - second.day_of_week;
-    }
+  return result.sort(
+    (first, second) => {
+      if (
+        first.day_of_week !==
+        second.day_of_week
+      ) {
+        return (
+          first.day_of_week -
+          second.day_of_week
+        );
+      }
 
-    return first.start_time.localeCompare(second.start_time);
-  });
+      return first.start_time.localeCompare(
+        second.start_time,
+      );
+    },
+  );
 }
 
 async function getUniqueSlug(
@@ -616,6 +692,9 @@ export async function createSpace(
           start_time: availability.start_time,
           end_time: availability.end_time,
 
+          ends_next_day:
+  availability.ends_next_day,
+
           location: availability.location || null,
           notes: availability.notes || null,
 
@@ -702,13 +781,14 @@ export async function updateSpace(
   const { data: previousAvailability } = await supabase
     .from("space_availability")
     .select(`
-      day_of_week,
-      start_time,
-      end_time,
-      location,
-      notes,
-      active
-    `)
+  day_of_week,
+  start_time,
+  end_time,
+  ends_next_day,
+  location,
+  notes,
+  active
+`)
     .eq("space_id", spaceId)
     .eq("organization_id", context.organizationId)
     .eq("club_id", context.clubId);
@@ -797,6 +877,9 @@ export async function updateSpace(
             start_time: availability.start_time,
             end_time: availability.end_time,
 
+            ends_next_day:
+  availability.ends_next_day,
+
             location: availability.location || null,
             notes: availability.notes || null,
 
@@ -823,6 +906,9 @@ export async function updateSpace(
               day_of_week: availability.day_of_week,
               start_time: availability.start_time,
               end_time: availability.end_time,
+
+              ends_next_day:
+  availability.ends_next_day,
 
               location: availability.location,
               notes: availability.notes,

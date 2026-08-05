@@ -424,10 +424,13 @@ export function SpaceForm({
               Disponibilidad semanal
             </h2>
 
-            <p className="mt-2 text-sm text-slate-600">
-              Podés agregar más de una franja
-              horaria para el mismo día.
-            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+  Podés agregar más de una franja
+  horaria para el mismo día. Si la
+  hora de finalización es anterior a
+  la de inicio, se considerará que el
+  turno termina al día siguiente.
+</p>
           </div>
 
           <button
@@ -490,19 +493,27 @@ export function SpaceForm({
                 </Field>
 
                 <Field label="Hasta">
-                  <input
-                    type="time"
-                    value={row.end_time}
-                    onChange={(event) =>
-                      updateAvailability(
-                        row.id,
-                        "end_time",
-                        event.target.value,
-                      )
-                    }
-                    className="input"
-                  />
-                </Field>
+  <input
+    type="time"
+    value={row.end_time}
+    onChange={(event) =>
+      updateAvailability(
+        row.id,
+        "end_time",
+        event.target.value,
+      )
+    }
+    className="input"
+  />
+
+  {row.start_time &&
+  row.end_time &&
+  row.end_time < row.start_time ? (
+    <span className="mt-2 block text-xs font-medium text-blue-700">
+      Finaliza al día siguiente
+    </span>
+  ) : null}
+</Field>
 
                 <Field label="Ubicación">
                   <input
