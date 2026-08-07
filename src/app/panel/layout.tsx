@@ -67,6 +67,13 @@ export default async function PanelLayout({
   Espacios
 </Link>
 
+<Link
+  href="/panel/reservas"
+  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+>
+  Reservas
+</Link>
+
               <Link
                 href="/panel/personas"
                 className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
