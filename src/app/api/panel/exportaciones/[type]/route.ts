@@ -1,19 +1,13 @@
-import {
-  NextRequest,
-} from "next/server";
+import { NextRequest } from "next/server";
 
-import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
-
+import { getAdminContext } from "@/lib/auth/admin-context";
 import {
   csvResponse,
   type CsvRow,
 } from "@/lib/exports/csv";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-import {
-  createAdminClient,
-} from "@/lib/supabase/admin";
+export const dynamic = "force-dynamic";
 
 type RouteContext = {
   params: Promise<{
@@ -22,14 +16,9 @@ type RouteContext = {
 };
 
 function getSingleRelation<T>(
-  value:
-    | T
-    | T[]
-    | null,
-) {
-  if (
-    Array.isArray(value)
-  ) {
+  value: T | T[] | null,
+): T | null {
+  if (Array.isArray(value)) {
     return value[0] ?? null;
   }
 
@@ -42,14 +31,11 @@ function getToday() {
     {
       timeZone:
         "America/Argentina/Buenos_Aires",
-
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     },
-  ).format(
-    new Date(),
-  );
+  ).format(new Date());
 }
 
 function formatNumber(
@@ -63,9 +49,7 @@ function formatNumber(
     Number(value);
 
   if (
-    !Number.isFinite(
-      number,
-    )
+    !Number.isFinite(number)
   ) {
     return "";
   }
@@ -83,7 +67,8 @@ function formatNumber(
 function formatDateTime(
   value:
     | string
-    | null,
+    | null
+    | undefined,
 ) {
   if (!value) {
     return "";
@@ -97,7 +82,6 @@ function formatDateTime(
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-
       timeZone:
         "America/Argentina/Buenos_Aires",
     },
@@ -109,8 +93,10 @@ function formatDateTime(
 function statusLabel(
   value: string,
 ) {
-  const labels:
-    Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     pending: "Pendiente",
     partial: "Pago parcial",
     overdue: "Vencida",
@@ -124,7 +110,6 @@ function statusLabel(
 
     unpaid: "Sin pagar",
     refunded: "Reintegrada",
-
     approved: "Aprobado",
   };
 
@@ -137,12 +122,12 @@ function statusLabel(
 function paymentMethodLabel(
   value: string,
 ) {
-  const labels:
-    Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     cash: "Efectivo",
-
-    transfer:
-      "Transferencia",
+    transfer: "Transferencia",
 
     debit_card:
       "Tarjeta de débito",
@@ -176,6 +161,33 @@ function validDate(
   );
 }
 
+function calculateDaysLate(
+  today: string,
+  dueDate: string | null,
+) {
+  if (!dueDate) {
+    return 0;
+  }
+
+  const todayMs =
+    Date.parse(
+      `${today}T00:00:00Z`,
+    );
+
+  const dueMs =
+    Date.parse(
+      `${dueDate}T00:00:00Z`,
+    );
+
+  return Math.max(
+    Math.floor(
+      (todayMs - dueMs) /
+        86_400_000,
+    ),
+    0,
+  );
+}
+
 export async function GET(
   request: NextRequest,
   routeContext: RouteContext,
@@ -195,18 +207,14 @@ export async function GET(
     );
   }
 
-  const {
-    type,
-  } =
+  const { type } =
     await routeContext.params;
 
   const supabase =
     createAdminClient();
 
   const url =
-    new URL(
-      request.url,
-    );
+    new URL(request.url);
 
   const from =
     url.searchParams.get(
@@ -224,9 +232,7 @@ export async function GET(
   /*
    * PERSONAS
    */
-  if (
-    type === "personas"
-  ) {
+  if (type === "personas") {
     const {
       data,
       error,
@@ -303,9 +309,7 @@ export async function GET(
   /*
    * CUOTAS
    */
-  if (
-    type === "cuotas"
-  ) {
+  if (type === "cuotas") {
     let query =
       supabase
         .from(
@@ -339,9 +343,7 @@ export async function GET(
           context.clubId,
         );
 
-    if (
-      validDate(from)
-    ) {
+    if (validDate(from)) {
       query =
         query.gte(
           "due_date",
@@ -349,9 +351,7 @@ export async function GET(
         );
     }
 
-    if (
-      validDate(to)
-    ) {
+    if (validDate(to)) {
       query =
         query.lte(
           "due_date",
@@ -403,8 +403,7 @@ export async function GET(
 
           const balance =
             Math.max(
-              amount -
-                paid,
+              amount - paid,
               0,
             );
 
@@ -467,9 +466,7 @@ export async function GET(
   /*
    * MOROSIDAD
    */
-  if (
-    type === "morosidad"
-  ) {
+  if (type === "morosidad") {
     const {
       data,
       error,
@@ -524,80 +521,70 @@ export async function GET(
       );
     }
 
+    /*
+     * flatMap evita generar:
+     *
+     * CsvRow | null
+     *
+     * Si una cuota no tiene deuda,
+     * devuelve [].
+     *
+     * Si tiene deuda,
+     * devuelve [CsvRow].
+     */
     const rows: CsvRow[] =
-      (data ?? [])
-        .map(
-          (fee) => {
-            const member =
-              getSingleRelation(
-                fee.members,
-              );
+      (data ?? []).flatMap(
+        (fee): CsvRow[] => {
+          const member =
+            getSingleRelation(
+              fee.members,
+            );
 
-            const activity =
-              getSingleRelation(
-                fee.activities,
-              );
+          const activity =
+            getSingleRelation(
+              fee.activities,
+            );
 
-            const amount =
-              Number(
-                fee.amount,
-              );
+          const amount =
+            Number(
+              fee.amount,
+            );
 
-            const paid =
-              Number(
-                fee.paid_amount,
-              );
+          const paid =
+            Number(
+              fee.paid_amount,
+            );
 
-            const balance =
-              Math.max(
-                amount -
-                  paid,
-                0,
-              );
+          const balance =
+            Math.max(
+              amount - paid,
+              0,
+            );
 
-            if (
-              balance <= 0 ||
-              [
-                "paid",
-                "cancelled",
-                "void",
-              ].includes(
-                fee.status,
-              )
-            ) {
-              return null;
-            }
+          if (
+            balance <= 0 ||
+            [
+              "paid",
+              "cancelled",
+              "void",
+            ].includes(
+              fee.status,
+            )
+          ) {
+            return [];
+          }
 
-            const dueDate =
-              fee.due_date;
+          const dueDate =
+            fee.due_date;
 
-            let daysLate = 0;
+          const daysLate =
+            calculateDaysLate(
+              today,
+              dueDate,
+            );
 
-            if (dueDate) {
-              const todayMs =
-                Date.parse(
-                  `${today}T00:00:00Z`,
-                );
-
-              const dueMs =
-                Date.parse(
-                  `${dueDate}T00:00:00Z`,
-                );
-
-              daysLate =
-                Math.max(
-                  Math.floor(
-                    (
-                      todayMs -
-                      dueMs
-                    ) /
-                      86_400_000,
-                  ),
-                  0,
-                );
-            }
-
-            return {
+          return [
+            {
               Apellido:
                 member?.last_name ??
                 "",
@@ -640,15 +627,10 @@ export async function GET(
                 formatNumber(
                   balance,
                 ),
-            } satisfies CsvRow;
-          },
-        )
-        .filter(
-          (
-            row,
-          ): row is CsvRow =>
-            row !== null,
-        );
+            },
+          ];
+        },
+      );
 
     return csvResponse(
       `clubsmart-morosidad-${today}.csv`,
@@ -659,9 +641,7 @@ export async function GET(
   /*
    * RESERVAS
    */
-  if (
-    type === "reservas"
-  ) {
+  if (type === "reservas") {
     let query =
       supabase
         .from(
@@ -697,9 +677,7 @@ export async function GET(
           context.clubId,
         );
 
-    if (
-      validDate(from)
-    ) {
+    if (validDate(from)) {
       query =
         query.gte(
           "reservation_date",
@@ -707,9 +685,7 @@ export async function GET(
         );
     }
 
-    if (
-      validDate(to)
-    ) {
+    if (validDate(to)) {
       query =
         query.lte(
           "reservation_date",
@@ -745,7 +721,9 @@ export async function GET(
 
     const rows: CsvRow[] =
       (data ?? []).map(
-        (reservation) => {
+        (
+          reservation,
+        ) => {
           const space =
             getSingleRelation(
               reservation.club_spaces,
@@ -870,9 +848,7 @@ export async function GET(
           context.clubId,
         );
 
-    if (
-      validDate(from)
-    ) {
+    if (validDate(from)) {
       query =
         query.gte(
           "paid_at",
@@ -880,9 +856,7 @@ export async function GET(
         );
     }
 
-    if (
-      validDate(to)
-    ) {
+    if (validDate(to)) {
       query =
         query.lte(
           "paid_at",
