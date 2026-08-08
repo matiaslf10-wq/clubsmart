@@ -1108,3 +1108,483 @@ export async function cancelReservation(
     "La reserva fue cancelada y el turno volvió a quedar disponible.",
   );
 }
+const allowedManualPaymentMethods =
+  new Set([
+    "cash",
+    "transfer",
+    "debit_card",
+    "credit_card",
+    "mercado_pago",
+    "pagotic",
+    "other",
+  ]);
+
+function parseMoney(
+  value: string,
+) {
+  const normalized =
+    value
+      .trim()
+      .replace(/\s/g, "")
+      .replace(
+        /\.(?=\d{3}(?:[,.]|$))/g,
+        "",
+      )
+      .replace(",", ".");
+
+  const amount =
+    Number(normalized);
+
+  return Number.isFinite(
+    amount,
+  )
+    ? amount
+    : null;
+}
+
+function moneyToCents(
+  value: number,
+) {
+  return Math.round(
+    value * 100,
+  );
+}
+
+function redirectToReservation(
+  reservationId: string,
+  type:
+    | "success"
+    | "error",
+  message: string,
+): never {
+  const parameters =
+    new URLSearchParams({
+      [type]: message,
+    });
+
+  redirect(
+    `/panel/reservas/${reservationId}?${parameters.toString()}`,
+  );
+}
+
+export async function recordManualReservationPayment(
+  reservationId: string,
+  formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageReservations(
+      context.role,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "Tu usuario no tiene permisos para registrar pagos.",
+    );
+  }
+
+  if (
+    !isUuid(
+      reservationId,
+    )
+  ) {
+    redirect(
+      "/panel/reservas",
+    );
+  }
+
+  const amountText =
+    readText(
+      formData,
+      "amount",
+    );
+
+  const paymentMethod =
+    readText(
+      formData,
+      "payment_method",
+    );
+
+  const externalReference =
+    readText(
+      formData,
+      "external_reference",
+    );
+
+  const notes =
+    readText(
+      formData,
+      "notes",
+    );
+
+  const amount =
+    parseMoney(
+      amountText,
+    );
+
+  if (
+    amount === null ||
+    amount <= 0
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "El importe debe ser mayor que cero.",
+    );
+  }
+
+  if (
+    !allowedManualPaymentMethods.has(
+      paymentMethod,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "El medio de pago seleccionado no es válido.",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: reservation,
+    error: reservationError,
+  } = await supabase
+    .from(
+      "space_reservations",
+    )
+    .select(`
+      id,
+      status,
+      amount,
+      paid_amount
+    `)
+    .eq(
+      "id",
+      reservationId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
+
+  if (
+    reservationError ||
+    !reservation
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "La reserva no existe o no pertenece a este club.",
+    );
+  }
+
+  if (
+    [
+      "rejected",
+      "cancelled",
+    ].includes(
+      reservation.status,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "No se pueden registrar pagos sobre una reserva rechazada o cancelada.",
+    );
+  }
+
+  const reservationAmount =
+    Number(
+      reservation.amount,
+    );
+
+  const paidAmount =
+    Number(
+      reservation.paid_amount,
+    );
+
+  const remainingAmount =
+    Math.max(
+      reservationAmount -
+        paidAmount,
+      0,
+    );
+
+  if (
+    moneyToCents(
+      amount,
+    ) >
+    moneyToCents(
+      remainingAmount,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      `El pago supera el saldo pendiente de la reserva.`,
+    );
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const {
+    error: paymentError,
+  } = await supabase
+    .from(
+      "reservation_payments",
+    )
+    .insert({
+      organization_id:
+        context.organizationId,
+
+      club_id:
+        context.clubId,
+
+      reservation_id:
+        reservationId,
+
+      amount,
+
+      status:
+        "approved",
+
+      source:
+        "manual",
+
+      payment_method:
+        paymentMethod,
+
+      /*
+       * Aunque el administrador
+       * seleccione Mercado Pago o
+       * Pago TIC como medio, sigue
+       * siendo una carga manual.
+       *
+       * provider se usará cuando
+       * el pago provenga realmente
+       * de la API/webhook.
+       */
+      provider: null,
+
+      provider_payment_id:
+        null,
+
+      external_reference:
+        externalReference ||
+        null,
+
+      provider_status:
+        null,
+
+      paid_at: now,
+
+      notes:
+        notes || null,
+
+      metadata: {
+        registered_manually:
+          true,
+      },
+
+      created_by_user_id:
+        context.userId,
+
+      created_at: now,
+      updated_at: now,
+    });
+
+  if (paymentError) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      `No fue posible registrar el pago: ${paymentError.message}`,
+    );
+  }
+
+  revalidatePath(
+    `/panel/reservas/${reservationId}`,
+  );
+
+  revalidatePath(
+    "/panel/reservas",
+  );
+
+  revalidatePath(
+    "/panel/reservas/pendientes",
+  );
+
+  revalidatePath(
+    "/panel",
+    "layout",
+  );
+
+  redirectToReservation(
+    reservationId,
+    "success",
+    "El pago fue registrado correctamente.",
+  );
+}
+
+export async function cancelManualReservationPayment(
+  paymentId: string,
+  reservationId: string,
+  _formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageReservations(
+      context.role,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "Tu usuario no tiene permisos para anular pagos.",
+    );
+  }
+
+  if (
+    !isUuid(
+      paymentId,
+    ) ||
+    !isUuid(
+      reservationId,
+    )
+  ) {
+    redirect(
+      "/panel/reservas",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: payment,
+    error: paymentError,
+  } = await supabase
+    .from(
+      "reservation_payments",
+    )
+    .select(`
+      id,
+      reservation_id,
+      source,
+      status
+    `)
+    .eq(
+      "id",
+      paymentId,
+    )
+    .eq(
+      "reservation_id",
+      reservationId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
+
+  if (
+    paymentError ||
+    !payment
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "El pago no existe.",
+    );
+  }
+
+  if (
+    payment.source !==
+      "manual" ||
+    payment.status !==
+      "approved"
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "Solamente pueden anularse pagos manuales aprobados.",
+    );
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const {
+    data: updatedPayment,
+    error: updateError,
+  } = await supabase
+    .from(
+      "reservation_payments",
+    )
+    .update({
+      status:
+        "cancelled",
+
+      cancelled_at:
+        now,
+
+      updated_at:
+        now,
+    })
+    .eq(
+      "id",
+      paymentId,
+    )
+    .eq(
+      "status",
+      "approved",
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (
+    updateError ||
+    !updatedPayment
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "No fue posible anular el pago.",
+    );
+  }
+
+  revalidatePath(
+    `/panel/reservas/${reservationId}`,
+  );
+
+  revalidatePath(
+    "/panel/reservas",
+  );
+
+  revalidatePath(
+    "/panel/reservas/pendientes",
+  );
+
+  redirectToReservation(
+    reservationId,
+    "success",
+    "El pago fue anulado y el saldo de la reserva fue recalculado.",
+  );
+}

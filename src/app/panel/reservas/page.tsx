@@ -1033,6 +1033,15 @@ function ReservationCard({
         </div>
       ) : null}
 
+      <div className="mt-6">
+  <Link
+    href={`/panel/reservas/${reservation.id}`}
+    className="inline-flex rounded-lg border border-blue-300 bg-white px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+  >
+    Ver detalle y pagos
+  </Link>
+</div>
+
       <ReservationActions
         reservation={
           reservation

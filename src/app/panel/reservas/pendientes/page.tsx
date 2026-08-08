@@ -530,6 +530,13 @@ export default async function PendingReservationsPage({
                     >
                       Ver día
                     </Link>
+
+                    <Link
+  href={`/panel/reservas/${reservation.id}`}
+  className="rounded-lg border border-blue-300 bg-white px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+>
+  Ver detalle y pagos
+</Link>
                   </div>
                 </article>
               );
