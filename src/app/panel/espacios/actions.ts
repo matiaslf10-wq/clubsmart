@@ -39,10 +39,6 @@ const allowedDepositTypes = new Set([
   "percentage",
 ]);
 
-function canManageSpaces(role: string) {
-  return role === "owner" || role === "admin";
-}
-
 function readText(formData: FormData, field: string) {
   const value = formData.get(field);
 
