@@ -214,35 +214,20 @@ export async function createPublicReservation(
     createAdminClient();
 
   const {
-    data: club,
-    error: clubError,
-  } = await supabase
-    .from("clubs")
-    .select(`
-      id,
-      organization_id,
-      slug,
-      name
-    `)
-    .eq("slug", slug)
-    .maybeSingle();
+  data: club,
+  error: clubError,
+} = await supabase
+  .from("clubs")
+  .select("id, organization_id, slug, name")
+  .eq("slug", slug)
+  .maybeSingle();
 
-  if (
-    club(`
-      id,
-      organization_id,
-      slug,
-      name
-    `)
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (
-    clubError ||
-    !club
-  ) {
-    redirect("/");
-  }
+if (
+  clubError ||
+  !club
+) {
+  redirect("/");
+}
 
   const {
     data: space,
