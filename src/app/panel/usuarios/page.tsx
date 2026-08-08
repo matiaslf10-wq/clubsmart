@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/admin";
 
 import {
+  inviteOrganizationUser,
   removeOrganizationUser,
   updateOrganizationUserRole,
 } from "@/app/panel/usuarios/actions";
@@ -381,6 +382,80 @@ export default async function UsersPage({
           description="Consulta información sin capacidad de modificarla."
         />
       </section>
+
+      <section className="mt-8 rounded-2xl border border-blue-200 bg-blue-50 p-6">
+  <div>
+    <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+      Incorporar al equipo
+    </p>
+
+    <h2 className="mt-2 text-xl font-bold text-slate-900">
+      Invitar usuario
+    </h2>
+
+    <p className="mt-2 text-sm leading-6 text-slate-600">
+      La persona recibirá un correo
+      para aceptar la invitación y
+      crear su contraseña.
+    </p>
+  </div>
+
+  <form
+    action={
+      inviteOrganizationUser
+    }
+    className="mt-6 grid gap-5 lg:grid-cols-[1.5fr_1fr_auto]"
+  >
+    <label>
+      <span className="text-sm font-medium text-slate-700">
+        Correo electrónico
+      </span>
+
+      <input
+        name="email"
+        type="email"
+        required
+        autoComplete="email"
+        placeholder="persona@club.com"
+        className="input mt-2"
+      />
+    </label>
+
+    <label>
+      <span className="text-sm font-medium text-slate-700">
+        Rol
+      </span>
+
+      <select
+        name="role"
+        defaultValue="operator"
+        required
+        className="input mt-2"
+      >
+        <option value="admin">
+          Administrador
+        </option>
+
+        <option value="operator">
+          Operador
+        </option>
+
+        <option value="viewer">
+          Solo lectura
+        </option>
+      </select>
+    </label>
+
+    <div className="flex items-end">
+      <button
+        type="submit"
+        className="w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 lg:w-auto"
+      >
+        Enviar invitación
+      </button>
+    </div>
+  </form>
+</section>
 
       <section className="mt-8 space-y-4">
         {users.map(

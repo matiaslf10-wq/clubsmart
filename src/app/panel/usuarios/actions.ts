@@ -349,3 +349,160 @@ export async function removeOrganizationUser(
     "El usuario ya no tiene acceso a este club.",
   );
 }
+export async function inviteOrganizationUser(
+  formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageUsers(
+      context.role,
+    )
+  ) {
+    redirect("/panel");
+  }
+
+  const email =
+    readText(
+      formData,
+      "email",
+    ).toLowerCase();
+
+  const role =
+    readText(
+      formData,
+      "role",
+    );
+
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email,
+    )
+  ) {
+    redirectToUsers(
+      "error",
+      "Ingresá un correo electrónico válido.",
+    );
+  }
+
+  if (
+    !assignableRoles.has(
+      role,
+    )
+  ) {
+    redirectToUsers(
+      "error",
+      "El rol seleccionado no es válido.",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: invitationData,
+    error: invitationError,
+  } =
+    await supabase.auth.admin.inviteUserByEmail(
+      email,
+      {
+        redirectTo:
+          "https://clubsmart.vercel.app/auth/crear-clave",
+
+        data: {
+          invited_to_organization_id:
+            context.organizationId,
+
+          invited_to_club_id:
+            context.clubId,
+
+          invited_to_club_name:
+            context.clubName,
+
+          invited_role:
+            role,
+        },
+      },
+    );
+
+  if (
+    invitationError ||
+    !invitationData.user
+  ) {
+    redirectToUsers(
+      "error",
+      invitationError?.message ??
+        "No fue posible enviar la invitación.",
+    );
+  }
+
+  const invitedUserId =
+    invitationData.user.id;
+
+  const {
+    data: existingMembership,
+    error: existingMembershipError,
+  } = await supabase
+    .from("organization_users")
+    .select("user_id, role")
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "user_id",
+      invitedUserId,
+    )
+    .maybeSingle();
+
+  if (
+    existingMembershipError
+  ) {
+    redirectToUsers(
+      "error",
+      `No fue posible verificar el usuario: ${existingMembershipError.message}`,
+    );
+  }
+
+  if (existingMembership) {
+    redirectToUsers(
+      "error",
+      "Ese usuario ya pertenece a este club.",
+    );
+  }
+
+  const {
+    error: membershipError,
+  } = await supabase
+    .from("organization_users")
+    .insert({
+      organization_id:
+        context.organizationId,
+
+      user_id:
+        invitedUserId,
+
+      role,
+    });
+
+  if (membershipError) {
+    await supabase.auth.admin.deleteUser(
+      invitedUserId,
+    );
+
+    redirectToUsers(
+      "error",
+      `No fue posible vincular el usuario al club: ${membershipError.message}`,
+    );
+  }
+
+  revalidatePath(
+    "/panel/usuarios",
+  );
+
+  redirectToUsers(
+    "success",
+    `Invitación enviada a ${email}.`,
+  );
+}
