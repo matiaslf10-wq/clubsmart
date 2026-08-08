@@ -6,6 +6,9 @@ import {
   type CsvRow,
 } from "@/lib/exports/csv";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canExportData,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -196,16 +199,17 @@ export async function GET(
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    return new Response(
-      "Sin permisos",
-      {
-        status: 403,
-      },
-    );
-  }
+  !canExportData(
+    context.role,
+  )
+) {
+  return new Response(
+    "Sin permisos",
+    {
+      status: 403,
+    },
+  );
+}
 
   const { type } =
     await routeContext.params;

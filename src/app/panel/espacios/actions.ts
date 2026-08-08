@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canManageSpaces,
+} from "@/lib/auth/permissions";
 
 type AvailabilityInput = {
   day_of_week: number;

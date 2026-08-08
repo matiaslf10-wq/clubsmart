@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  canExportData,
+} from "@/lib/auth/permissions";
 
 export const dynamic =
   "force-dynamic";
@@ -66,11 +69,12 @@ export default async function ExportsPage() {
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canExportData(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
 
   const month =
     getCurrentMonthRange();

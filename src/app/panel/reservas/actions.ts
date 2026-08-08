@@ -28,14 +28,9 @@ import {
   type ExistingReservation,
 } from "@/lib/reservations/availability";
 
-function canManageReservations(
-  role: string,
-) {
-  return (
-    role === "owner" ||
-    role === "admin"
-  );
-}
+import {
+  canManageReservations,
+} from "@/lib/auth/permissions";
 
 function readText(
   formData: FormData,
