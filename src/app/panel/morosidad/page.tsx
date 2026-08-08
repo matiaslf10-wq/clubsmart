@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canViewDelinquency,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -272,11 +275,12 @@ export default async function DelinquencyPage({
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canViewDelinquency(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
 
   const parameters =
     await searchParams;

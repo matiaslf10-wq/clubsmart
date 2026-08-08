@@ -22,6 +22,11 @@ import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
+import {
+  canRecordPayments,
+  canViewReservations,
+} from "@/lib/auth/permissions";
+
 export const dynamic =
   "force-dynamic";
 
@@ -192,11 +197,12 @@ export default async function ReservationDetailPage({
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canViewReservations(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
 
   const { id } =
     await params;
@@ -350,13 +356,16 @@ export default async function ReservationDetailPage({
     );
 
   const canRegisterPayment =
-    remainingAmount > 0 &&
-    ![
-      "rejected",
-      "cancelled",
-    ].includes(
-      reservation.status,
-    );
+  canRecordPayments(
+    context.role,
+  ) &&
+  remainingAmount > 0 &&
+  ![
+    "rejected",
+    "cancelled",
+  ].includes(
+    reservation.status,
+  );
 
   return (
     <div>
@@ -568,10 +577,13 @@ export default async function ReservationDetailPage({
                       </p>
                     ) : null}
 
-                    {payment.source ===
-                      "manual" &&
-                    payment.status ===
-                      "approved" ? (
+                    {canRecordPayments(
+  context.role,
+) &&
+payment.source ===
+  "manual" &&
+payment.status ===
+  "approved" ? (
                       <form
                         action={cancelManualReservationPayment.bind(
                           null,

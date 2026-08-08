@@ -4,18 +4,23 @@ import { redirect } from "next/navigation";
 import { createSpace } from "@/app/panel/espacios/actions";
 import { SpaceForm } from "@/app/panel/espacios/space-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  canManageSpaces,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewSpacePage() {
   const context = await getAdminContext();
-
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canManageSpaces(
+    context.role,
+  )
+) {
+  redirect(
+    "/panel/espacios",
+  );
+}
 
   return (
     <div>

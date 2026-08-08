@@ -6,14 +6,30 @@ export type ClubRole =
 
 export type ClubPermission =
   | "club.settings.manage"
+
+  | "activities.view"
   | "activities.manage"
+
+  | "members.view"
   | "members.manage"
+
+  | "fees.view"
   | "fees.manage"
+
+  | "payments.view"
   | "payments.record"
   | "payments.configure"
+
+  | "reservations.view"
   | "reservations.manage"
+
+  | "spaces.view"
   | "spaces.manage"
+
+  | "delinquency.view"
+
   | "exports.download"
+
   | "users.manage"
   | "audit.view";
 
@@ -23,41 +39,94 @@ const permissionsByRole: Record<
 > = {
   owner: new Set([
     "club.settings.manage",
+
+    "activities.view",
     "activities.manage",
+
+    "members.view",
     "members.manage",
+
+    "fees.view",
     "fees.manage",
+
+    "payments.view",
     "payments.record",
     "payments.configure",
+
+    "reservations.view",
     "reservations.manage",
+
+    "spaces.view",
     "spaces.manage",
+
+    "delinquency.view",
+
     "exports.download",
+
     "users.manage",
     "audit.view",
   ]),
 
   admin: new Set([
     "club.settings.manage",
+
+    "activities.view",
     "activities.manage",
+
+    "members.view",
     "members.manage",
+
+    "fees.view",
     "fees.manage",
+
+    "payments.view",
     "payments.record",
     "payments.configure",
+
+    "reservations.view",
     "reservations.manage",
+
+    "spaces.view",
     "spaces.manage",
+
+    "delinquency.view",
+
     "exports.download",
+
     "users.manage",
     "audit.view",
   ]),
 
   operator: new Set([
+    "activities.view",
     "activities.manage",
+
+    "members.view",
     "members.manage",
+
+    "fees.view",
     "fees.manage",
+
+    "payments.view",
     "payments.record",
+
+    "reservations.view",
     "reservations.manage",
+
+    "spaces.view",
+
+    "delinquency.view",
   ]),
 
-  viewer: new Set([]),
+  viewer: new Set([
+    "activities.view",
+    "members.view",
+    "fees.view",
+    "payments.view",
+    "reservations.view",
+    "spaces.view",
+    "delinquency.view",
+  ]),
 };
 
 export function isClubRole(
@@ -93,6 +162,87 @@ export function canManageClub(
   );
 }
 
+export function canViewReservations(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "reservations.view",
+  );
+}
+
+export function canManageReservations(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "reservations.manage",
+  );
+}
+
+export function canViewSpaces(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "spaces.view",
+  );
+}
+
+export function canManageSpaces(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "spaces.manage",
+  );
+}
+
+export function canViewPayments(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "payments.view",
+  );
+}
+
+export function canRecordPayments(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "payments.record",
+  );
+}
+
+export function canConfigurePayments(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "payments.configure",
+  );
+}
+
+export function canViewDelinquency(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "delinquency.view",
+  );
+}
+
+export function canExportData(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "exports.download",
+  );
+}
+
 export function canManageActivities(
   role: string | null | undefined,
 ) {
@@ -117,51 +267,6 @@ export function canManageFees(
   return hasPermission(
     role,
     "fees.manage",
-  );
-}
-
-export function canRecordPayments(
-  role: string | null | undefined,
-) {
-  return hasPermission(
-    role,
-    "payments.record",
-  );
-}
-
-export function canConfigurePayments(
-  role: string | null | undefined,
-) {
-  return hasPermission(
-    role,
-    "payments.configure",
-  );
-}
-
-export function canManageReservations(
-  role: string | null | undefined,
-) {
-  return hasPermission(
-    role,
-    "reservations.manage",
-  );
-}
-
-export function canManageSpaces(
-  role: string | null | undefined,
-) {
-  return hasPermission(
-    role,
-    "spaces.manage",
-  );
-}
-
-export function canExportData(
-  role: string | null | undefined,
-) {
-  return hasPermission(
-    role,
-    "exports.download",
   );
 }
 

@@ -16,6 +16,11 @@ import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
+import {
+  canManageReservations,
+  canViewReservations,
+} from "@/lib/auth/permissions";
+
 export const dynamic =
   "force-dynamic";
 
@@ -158,11 +163,17 @@ export default async function PendingReservationsPage({
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canViewReservations(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
+
+const canManage =
+  canManageReservations(
+    context.role,
+  );
 
   const parameters =
     await searchParams;
@@ -490,54 +501,58 @@ export default async function PendingReservationsPage({
                   ) : null}
 
                   <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-200 pt-5">
-                    {!isPast ? (
-                      <form
-                        action={confirmReservation.bind(
-                          null,
-                          reservation.id,
-                          reservation.reservation_date,
-                          "pendientes",
-                        )}
-                      >
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
-                        >
-                          Confirmar
-                        </button>
-                      </form>
-                    ) : null}
+  {canManage ? (
+    <>
+      {!isPast ? (
+        <form
+          action={confirmReservation.bind(
+            null,
+            reservation.id,
+            reservation.reservation_date,
+            "pendientes",
+          )}
+        >
+          <button
+            type="submit"
+            className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+          >
+            Confirmar
+          </button>
+        </form>
+      ) : null}
 
-                    <form
-                      action={rejectReservation.bind(
-                        null,
-                        reservation.id,
-                        reservation.reservation_date,
-                        "pendientes",
-                      )}
-                    >
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                      >
-                        Rechazar
-                      </button>
-                    </form>
+      <form
+        action={rejectReservation.bind(
+          null,
+          reservation.id,
+          reservation.reservation_date,
+          "pendientes",
+        )}
+      >
+        <button
+          type="submit"
+          className="rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+        >
+          Rechazar
+        </button>
+      </form>
+    </>
+  ) : null}
 
-                    <Link
-                      href={`/panel/reservas?fecha=${reservation.reservation_date}&vista=dia`}
-                      className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Ver día
-                    </Link>
+  <Link
+    href={`/panel/reservas?fecha=${reservation.reservation_date}&vista=dia`}
+    className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+  >
+    Ver día
+  </Link>
 
-                    <Link
-  href={`/panel/reservas/${reservation.id}`}
-  className="rounded-lg border border-blue-300 bg-white px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
->
-  Ver detalle y pagos
-</Link>
-                  </div>
+  <Link
+    href={`/panel/reservas/${reservation.id}`}
+    className="rounded-lg border border-blue-300 bg-white px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+  >
+    Ver detalle y pagos
+  </Link>
+</div>
                 </article>
               );
             },

@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { toggleSpaceActive } from "@/app/panel/espacios/actions";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canManageSpaces,
+  canViewSpaces,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -155,6 +159,18 @@ export default async function SpacesPage({
   searchParams,
 }: PageProps) {
   const context = await getAdminContext();
+  if (
+  !canViewSpaces(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
+
+const canManage =
+  canManageSpaces(
+    context.role,
+  );
 
   if (
     context.role !== "owner" &&
@@ -249,12 +265,14 @@ export default async function SpacesPage({
           </p>
         </div>
 
+{canManage ? (
         <Link
           href="/panel/espacios/nuevo"
           className="inline-flex justify-center rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
         >
           Nuevo espacio
         </Link>
+        ) : null}
       </div>
 
       {parameters.success ? (
@@ -492,6 +510,7 @@ space.price_description ? (
                   </div>
                 </div>
 
+{canManage ? (
                 <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-200 pt-5">
                   <Link
                     href={`/panel/espacios/${space.id}/editar`}
@@ -521,6 +540,7 @@ space.price_description ? (
                     </button>
                   </form>
                 </div>
+                ) : null}
               </article>
             );
           })}

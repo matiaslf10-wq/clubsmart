@@ -29,11 +29,14 @@ export default async function EditSpacePage({
   const context = await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canManageSpaces(
+    context.role,
+  )
+) {
+  redirect(
+    "/panel/espacios",
+  );
+}
 
   const { id } = await params;
 
