@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { logout } from "@/app/panel/actions";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  PendingReservationsLink,
+} from "@/app/panel/reservas/pending-reservations-link";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +70,7 @@ export default async function PanelLayout({
   Espacios
 </Link>
 
-<Link
-  href="/panel/reservas"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Reservas
-</Link>
+<PendingReservationsLink />
 
               <Link
                 href="/panel/personas"

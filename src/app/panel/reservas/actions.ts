@@ -707,14 +707,21 @@ export async function createManualReservation(
 }
 type ReservationReturnView =
   | "dia"
-  | "semana";
+  | "semana"
+  | "pendientes";
 
 function normalizeReservationView(
   value: string,
 ): ReservationReturnView {
-  return value === "semana"
-    ? "semana"
-    : "dia";
+  if (value === "semana") {
+    return "semana";
+  }
+
+  if (value === "pendientes") {
+    return "pendientes";
+  }
+
+  return "dia";
 }
 
 function redirectToReservations(
@@ -723,15 +730,32 @@ function redirectToReservations(
   type: "success" | "error",
   message: string,
 ): never {
+  const normalizedView =
+    normalizeReservationView(view);
+
   const parameters =
     new URLSearchParams({
-      fecha: returnDate,
-      vista:
-        normalizeReservationView(
-          view,
-        ),
       [type]: message,
     });
+
+  if (
+    normalizedView ===
+    "pendientes"
+  ) {
+    redirect(
+      `/panel/reservas/pendientes?${parameters.toString()}`,
+    );
+  }
+
+  parameters.set(
+    "fecha",
+    returnDate,
+  );
+
+  parameters.set(
+    "vista",
+    normalizedView,
+  );
 
   redirect(
     `/panel/reservas?${parameters.toString()}`,
@@ -881,12 +905,21 @@ async function updateReservationStatus({
   }
 
   revalidatePath(
-    "/panel/reservas",
-  );
+  "/panel/reservas",
+);
 
-  revalidatePath(
-    "/panel/reservas/nueva",
-  );
+revalidatePath(
+  "/panel/reservas/nueva",
+);
+
+revalidatePath(
+  "/panel/reservas/pendientes",
+);
+
+revalidatePath(
+  "/panel",
+  "layout",
+);
 }
 
 export async function confirmReservation(
