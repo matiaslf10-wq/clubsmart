@@ -135,6 +135,13 @@ export default async function PanelLayout({
               </Link>
 
               <Link
+  href="/panel/exportaciones"
+  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+>
+  Exportaciones
+</Link>
+
+              <Link
                 href={`/clubes/${context.clubSlug}`}
                 target="_blank"
                 rel="noopener noreferrer"
