@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   PendingReservationsLink,
 } from "@/app/panel/reservas/pending-reservations-link";
+import {
+  canManageUsers,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +81,17 @@ export default async function PanelLayout({
               >
                 Personas
               </Link>
+
+              {canManageUsers(
+  context.role,
+) ? (
+  <Link
+    href="/panel/usuarios"
+    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+  >
+    Usuarios
+  </Link>
+) : null}
 
               <Link
   href="/panel/cuotas"

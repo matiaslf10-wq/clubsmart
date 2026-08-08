@@ -8,6 +8,9 @@ import {
 } from "@/app/panel/espacios/space-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canManageSpaces,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
