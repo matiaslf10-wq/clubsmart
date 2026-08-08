@@ -705,3 +705,373 @@ export async function createManualReservation(
     )}`,
   );
 }
+type ReservationReturnView =
+  | "dia"
+  | "semana";
+
+function normalizeReservationView(
+  value: string,
+): ReservationReturnView {
+  return value === "semana"
+    ? "semana"
+    : "dia";
+}
+
+function redirectToReservations(
+  returnDate: string,
+  view: string,
+  type: "success" | "error",
+  message: string,
+): never {
+  const parameters =
+    new URLSearchParams({
+      fecha: returnDate,
+      vista:
+        normalizeReservationView(
+          view,
+        ),
+      [type]: message,
+    });
+
+  redirect(
+    `/panel/reservas?${parameters.toString()}`,
+  );
+}
+
+async function updateReservationStatus({
+  reservationId,
+  context,
+  allowedStatuses,
+  nextStatus,
+}: {
+  reservationId: string;
+
+  context: Awaited<
+    ReturnType<
+      typeof getAdminContext
+    >
+  >;
+
+  allowedStatuses: string[];
+
+  nextStatus:
+    | "confirmed"
+    | "rejected"
+    | "cancelled";
+}) {
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: reservation,
+    error: reservationError,
+  } = await supabase
+    .from(
+      "space_reservations",
+    )
+    .select(`
+      id,
+      status
+    `)
+    .eq(
+      "id",
+      reservationId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
+
+  if (
+    reservationError ||
+    !reservation
+  ) {
+    throw new Error(
+      "La reserva no existe o no pertenece a este club.",
+    );
+  }
+
+  if (
+    !allowedStatuses.includes(
+      reservation.status,
+    )
+  ) {
+    throw new Error(
+      "La reserva cambió de estado y ya no puede realizarse esta acción.",
+    );
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const updateValues: Record<
+    string,
+    unknown
+  > = {
+    status: nextStatus,
+    updated_at: now,
+  };
+
+  if (
+    nextStatus ===
+    "confirmed"
+  ) {
+    updateValues.confirmed_at =
+      now;
+
+    updateValues.confirmed_by_user_id =
+      context.userId;
+  }
+
+  if (
+    nextStatus ===
+    "rejected"
+  ) {
+    updateValues.rejected_at =
+      now;
+  }
+
+  if (
+    nextStatus ===
+    "cancelled"
+  ) {
+    updateValues.cancelled_at =
+      now;
+  }
+
+  const {
+    data: updatedReservation,
+    error: updateError,
+  } = await supabase
+    .from(
+      "space_reservations",
+    )
+    .update(updateValues)
+    .eq(
+      "id",
+      reservationId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .eq(
+      "status",
+      reservation.status,
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (
+    updateError ||
+    !updatedReservation
+  ) {
+    throw new Error(
+      "No fue posible modificar la reserva. Es posible que haya cambiado mientras la estabas revisando.",
+    );
+  }
+
+  revalidatePath(
+    "/panel/reservas",
+  );
+
+  revalidatePath(
+    "/panel/reservas/nueva",
+  );
+}
+
+export async function confirmReservation(
+  reservationId: string,
+  returnDate: string,
+  view: string,
+  _formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageReservations(
+      context.role,
+    )
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "Tu usuario no tiene permisos para confirmar reservas.",
+    );
+  }
+
+  if (
+    !isUuid(reservationId)
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "La reserva indicada no es válida.",
+    );
+  }
+
+  try {
+    await updateReservationStatus({
+      reservationId,
+      context,
+      allowedStatuses: [
+        "pending",
+      ],
+      nextStatus:
+        "confirmed",
+    });
+  } catch (error) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      error instanceof Error
+        ? error.message
+        : "No fue posible confirmar la reserva.",
+    );
+  }
+
+  redirectToReservations(
+    returnDate,
+    view,
+    "success",
+    "La reserva fue confirmada.",
+  );
+}
+
+export async function rejectReservation(
+  reservationId: string,
+  returnDate: string,
+  view: string,
+  _formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageReservations(
+      context.role,
+    )
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "Tu usuario no tiene permisos para rechazar reservas.",
+    );
+  }
+
+  if (
+    !isUuid(reservationId)
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "La reserva indicada no es válida.",
+    );
+  }
+
+  try {
+    await updateReservationStatus({
+      reservationId,
+      context,
+      allowedStatuses: [
+        "pending",
+      ],
+      nextStatus:
+        "rejected",
+    });
+  } catch (error) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      error instanceof Error
+        ? error.message
+        : "No fue posible rechazar la reserva.",
+    );
+  }
+
+  redirectToReservations(
+    returnDate,
+    view,
+    "success",
+    "La reserva fue rechazada y el turno volvió a quedar disponible.",
+  );
+}
+
+export async function cancelReservation(
+  reservationId: string,
+  returnDate: string,
+  view: string,
+  _formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageReservations(
+      context.role,
+    )
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "Tu usuario no tiene permisos para cancelar reservas.",
+    );
+  }
+
+  if (
+    !isUuid(reservationId)
+  ) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      "La reserva indicada no es válida.",
+    );
+  }
+
+  try {
+    await updateReservationStatus({
+      reservationId,
+      context,
+      allowedStatuses: [
+        "pending",
+        "confirmed",
+      ],
+      nextStatus:
+        "cancelled",
+    });
+  } catch (error) {
+    redirectToReservations(
+      returnDate,
+      view,
+      "error",
+      error instanceof Error
+        ? error.message
+        : "No fue posible cancelar la reserva.",
+    );
+  }
+
+  redirectToReservations(
+    returnDate,
+    view,
+    "success",
+    "La reserva fue cancelada y el turno volvió a quedar disponible.",
+  );
+}
