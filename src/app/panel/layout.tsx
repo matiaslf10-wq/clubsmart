@@ -10,6 +10,9 @@ import {
 import {
   canManageUsers,
 } from "@/lib/auth/permissions";
+import {
+  canViewNotifications,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +93,17 @@ export default async function PanelLayout({
     className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
   >
     Usuarios
+  </Link>
+) : null}
+
+{canViewNotifications(
+  context.role,
+) ? (
+  <Link
+    href="/panel/notificaciones"
+    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+  >
+    Notificaciones
   </Link>
 ) : null}
 
