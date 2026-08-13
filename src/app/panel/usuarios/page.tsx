@@ -61,7 +61,7 @@ const roleLabels:
       "Administrador",
 
     operator:
-      "Operador",
+      "Operador/Profesor",
 
     viewer:
       "Solo lectura",
@@ -76,7 +76,7 @@ const roleDescriptions:
       "Administración completa del club.",
 
     operator:
-      "Operación diaria, cobros y reservas.",
+      "Gestiona actividades, personas, cobros, reservas y comunicaciones operativas.",
 
     viewer:
       "Puede consultar información pero no modificarla.",
@@ -373,9 +373,9 @@ export default async function UsersPage({
         />
 
         <RoleCard
-          title="Operador"
-          description="Gestiona la operación diaria, reservas y cobros."
-        />
+  title="Operador/Profesor"
+  description="Gestiona actividades, personas, reservas, cobros y comunicaciones operativas."
+/>
 
         <RoleCard
           title="Solo lectura"
@@ -437,8 +437,8 @@ export default async function UsersPage({
         </option>
 
         <option value="operator">
-          Operador
-        </option>
+  Operador/Profesor
+</option>
 
         <option value="viewer">
           Solo lectura

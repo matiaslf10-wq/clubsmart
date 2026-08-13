@@ -31,7 +31,11 @@ export type ClubPermission =
   | "exports.download"
 
   | "users.manage"
-  | "audit.view";
+  | "audit.view"
+
+  | "notifications.view"
+| "notifications.send"
+| "notifications.manage";
 
 const permissionsByRole: Record<
   ClubRole,
@@ -65,6 +69,10 @@ const permissionsByRole: Record<
 
     "users.manage",
     "audit.view",
+
+    "notifications.view",
+"notifications.send",
+"notifications.manage",
   ]),
 
   admin: new Set([
@@ -95,6 +103,10 @@ const permissionsByRole: Record<
 
     "users.manage",
     "audit.view",
+
+    "notifications.view",
+"notifications.send",
+"notifications.manage",
   ]),
 
   operator: new Set([
@@ -116,6 +128,9 @@ const permissionsByRole: Record<
     "spaces.view",
 
     "delinquency.view",
+
+    "notifications.view",
+"notifications.send",
   ]),
 
   viewer: new Set([
@@ -126,6 +141,7 @@ const permissionsByRole: Record<
     "reservations.view",
     "spaces.view",
     "delinquency.view",
+    "notifications.view",
   ]),
 };
 
@@ -285,5 +301,32 @@ export function canViewAudit(
   return hasPermission(
     role,
     "audit.view",
+  );
+}
+
+export function canViewNotifications(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "notifications.view",
+  );
+}
+
+export function canSendNotifications(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "notifications.send",
+  );
+}
+
+export function canManageNotifications(
+  role: string | null | undefined,
+) {
+  return hasPermission(
+    role,
+    "notifications.manage",
   );
 }
