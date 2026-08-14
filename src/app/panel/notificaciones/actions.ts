@@ -273,6 +273,8 @@ export async function createNotification(
           id,
           first_name,
           last_name,
+          email,
+          phone,
           active
         )
       `)
@@ -337,10 +339,12 @@ export async function createNotification(
            * desde el perfil/contacto.
            */
           recipient_email:
-            null,
+  member.email ??
+  null,
 
-          recipient_phone:
-            null,
+recipient_phone:
+  member.phone ??
+  null,
         },
       );
     }
@@ -456,6 +460,8 @@ export async function createNotification(
         id,
         first_name,
         last_name,
+        email,
+        phone,
         active
       `)
       .eq(
@@ -499,10 +505,12 @@ export async function createNotification(
             `${member.first_name} ${member.last_name}`.trim(),
 
           recipient_email:
-            null,
+  member.email ??
+  null,
 
-          recipient_phone:
-            null,
+recipient_phone:
+  member.phone ??
+  null,
         }),
       );
   }
