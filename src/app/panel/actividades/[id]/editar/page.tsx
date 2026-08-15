@@ -1,18 +1,38 @@
 import Link from "next/link";
+
 import {
   notFound,
   redirect,
 } from "next/navigation";
 
-import { updateActivity } from "@/app/panel/actividades/actions";
-import { ActivityForm } from "@/app/panel/actividades/activity-form";
-import { ImageUploader } from "@/app/panel/image-uploader";
+import {
+  updateActivity,
+} from "@/app/panel/actividades/actions";
+
+import {
+  ActivityForm,
+} from "@/app/panel/actividades/activity-form";
+
+import {
+  ImageUploader,
+} from "@/app/panel/image-uploader";
+
 import {
   removeActivityImage,
   updateActivityImage,
 } from "@/app/panel/media-actions";
-import { getAdminContext } from "@/lib/auth/admin-context";
-import { createClient } from "@/lib/supabase/server";
+
+import {
+  getAdminContext,
+} from "@/lib/auth/admin-context";
+
+import {
+  canManageActivities,
+} from "@/lib/auth/permissions";
+
+import {
+  createClient,
+} from "@/lib/supabase/server";
 
 type PageProps = {
   params: Promise<{
@@ -20,78 +40,112 @@ type PageProps = {
   }>;
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 export default async function EditActivityPage({
   params,
 }: PageProps) {
-  const { id } = await params;
-  const context = await getAdminContext();
+  const {
+    id,
+  } = await params;
+
+  const context =
+    await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
+    !canManageActivities(
+      context.role,
+    )
   ) {
-    redirect("/panel/actividades");
+    redirect(
+      "/panel/actividades",
+    );
   }
 
-  const supabase = await createClient();
+  const supabase =
+    await createClient();
 
-  const { data: activity, error } =
-    await supabase
-      .from("activities")
-      .select(`
-        id,
-        name,
-        short_description,
-        description,
-        contact_name,
-        category,
-        level,
-        age_from,
-        age_to,
-        price,
-        price_description,
-        cover_image_url,
-        contact_whatsapp,
-        activity_schedules (
-          day_of_week,
-          start_time,
-          end_time,
-          location_name
-        )
-      `)
-      .eq("id", id)
-      .eq(
-        "organization_id",
-        context.organizationId,
+  const {
+    data:
+      activity,
+    error,
+  } = await supabase
+    .from(
+      "activities",
+    )
+    .select(`
+      id,
+      name,
+      short_description,
+      description,
+      contact_name,
+      category,
+      level,
+      age_from,
+      age_to,
+      cover_image_url,
+      contact_whatsapp,
+      activity_schedules (
+        day_of_week,
+        start_time,
+        end_time,
+        location_name
       )
-      .eq("club_id", context.clubId)
-      .maybeSingle();
+    `)
+    .eq(
+      "id",
+      id,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `No fue posible cargar la actividad: ${error.message}`,
     );
   }
 
-  if (!activity) {
+  if (
+    !activity
+  ) {
     notFound();
   }
 
   const updateAction =
-    updateActivity.bind(null, id);
+    updateActivity.bind(
+      null,
+      id,
+    );
 
   const saveActivityImage =
-    updateActivityImage.bind(null, id);
+    updateActivityImage.bind(
+      null,
+      id,
+    );
 
   const deleteActivityImage =
-    removeActivityImage.bind(null, id);
+    removeActivityImage.bind(
+      null,
+      id,
+    );
 
   const sortedSchedules = [
     ...activity.activity_schedules,
   ].sort(
-    (first, second) =>
+    (
+      first,
+      second,
+    ) =>
       first.day_of_week -
         second.day_of_week ||
       first.start_time.localeCompare(
@@ -122,10 +176,30 @@ export default async function EditActivityPage({
         </p>
 
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-          Los cambios guardados se mostrarán
-          automáticamente en la página pública
-          del club.
+          Los cambios guardados se
+          mostrarán automáticamente en
+          la página pública del club.
         </p>
+
+        <div className="mt-4 max-w-2xl rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-900">
+            Arancel de la actividad
+          </p>
+
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Los aranceles se administran
+            desde Tarifas para conservar
+            correctamente su vigencia e
+            historial.
+          </p>
+
+          <Link
+            href={`/panel/actividades/${activity.id}/tarifas`}
+            className="mt-3 inline-flex text-sm font-semibold text-blue-700 hover:text-blue-800"
+          >
+            Administrar tarifas →
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8">
@@ -137,7 +211,9 @@ export default async function EditActivityPage({
           }
           storageFolder={`${context.organizationId}/clubs/${context.clubId}/activities/${activity.id}`}
           aspect="cover"
-          saveImage={saveActivityImage}
+          saveImage={
+            saveActivityImage
+          }
           removeImage={
             deleteActivityImage
           }
@@ -146,54 +222,75 @@ export default async function EditActivityPage({
 
       <div className="mt-8">
         <ActivityForm
-          action={updateAction}
+          action={
+            updateAction
+          }
           submitLabel="Guardar cambios"
           initialValues={{
-            name: activity.name,
+            name:
+              activity.name,
+
             shortDescription:
-              activity.short_description ?? "",
+              activity.short_description ??
+              "",
+
             description:
-              activity.description ?? "",
+              activity.description ??
+              "",
+
             category:
-              activity.category ?? "",
+              activity.category ??
+              "",
+
             professor:
-              activity.contact_name ?? "",
-            level: activity.level ?? "",
+              activity.contact_name ??
+              "",
+
+            level:
+              activity.level ??
+              "",
+
             ageFrom:
               activity.age_from?.toString() ??
               "",
+
             ageTo:
               activity.age_to?.toString() ??
               "",
+
             ageMaximumIsFree:
-              activity.age_to === null,
-            price:
-              activity.price?.toString() ??
-              "",
-            priceDescription:
-              activity.price_description ??
-              "",
+              activity.age_to ===
+              null,
+
             contactWhatsapp:
-              activity.contact_whatsapp ?? "",
-            schedules: sortedSchedules.map(
-              (schedule) => ({
-                dayOfWeek:
-                  schedule.day_of_week,
-                startTime:
-                  schedule.start_time.slice(
-                    0,
-                    5,
-                  ),
-                endTime:
-                  schedule.end_time.slice(
-                    0,
-                    5,
-                  ),
-                locationName:
-                  schedule.location_name ??
-                  "",
-              }),
-            ),
+              activity.contact_whatsapp ??
+              "",
+
+            schedules:
+              sortedSchedules.map(
+                (
+                  schedule,
+                ) => ({
+                  dayOfWeek:
+                    schedule.day_of_week,
+
+                  startTime:
+                    schedule.start_time.slice(
+                      0,
+                      5,
+                    ),
+
+                  endTime:
+                    schedule.end_time.slice(
+                      0,
+                      5,
+                    ),
+
+                  locationName:
+                    schedule.location_name ??
+                    "",
+                }),
+              ),
           }}
         />
       </div>
