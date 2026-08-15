@@ -1,12 +1,16 @@
 "use server";
 
 import {
+  revalidatePath,
+} from "next/cache";
+
+import {
   redirect,
 } from "next/navigation";
 
 import {
-  revalidatePath,
-} from "next/cache";
+  writeAuditLog,
+} from "@/lib/audit/write-audit-log";
 
 import {
   getAdminContext,
@@ -64,6 +68,12 @@ function redirectToUsers(
   );
 }
 
+/*
+ * ========================================
+ * CAMBIAR ROL
+ * ========================================
+ */
+
 export async function updateOrganizationUserRole(
   userId: string,
   formData: FormData,
@@ -87,9 +97,8 @@ export async function updateOrganizationUserRole(
   }
 
   /*
-   * Por seguridad no permitimos
-   * cambiar el propio rol desde
-   * esta pantalla.
+   * No permitimos modificar
+   * el propio rol desde esta pantalla.
    */
   if (
     userId ===
@@ -108,11 +117,11 @@ export async function updateOrganizationUserRole(
     );
 
   /*
-   * Owner no se asigna desde
-   * el selector normal.
+   * El rol owner nunca se asigna
+   * desde este selector.
    *
    * La transferencia de propiedad
-   * será un flujo independiente.
+   * será un flujo específico.
    */
   if (
     !assignableRoles.has(
@@ -161,8 +170,8 @@ export async function updateOrganizationUserRole(
   }
 
   /*
-   * Un owner no puede degradarse
-   * mediante esta acción genérica.
+   * Un owner tampoco puede ser
+   * degradado mediante esta acción.
    */
   if (
     membership.role ===
@@ -174,6 +183,21 @@ export async function updateOrganizationUserRole(
     );
   }
 
+  /*
+   * Si eligieron exactamente
+   * el mismo rol no hacemos
+   * ninguna modificación.
+   */
+  if (
+    membership.role ===
+    newRole
+  ) {
+    redirectToUsers(
+      "success",
+      "El usuario ya tenía ese rol.",
+    );
+  }
+
   const {
     error: updateError,
   } = await supabase
@@ -181,7 +205,8 @@ export async function updateOrganizationUserRole(
       "organization_users",
     )
     .update({
-      role: newRole,
+      role:
+        newRole,
     })
     .eq(
       "organization_id",
@@ -199,6 +224,37 @@ export async function updateOrganizationUserRole(
     );
   }
 
+  /*
+   * Auditoría.
+   */
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "user.role_changed",
+
+      entityType:
+        "user",
+
+      entityId:
+        userId,
+
+      summary:
+        `Cambió el rol de un usuario de "${membership.role}" a "${newRole}".`,
+
+      metadata: {
+        target_user_id:
+          userId,
+
+        previous_role:
+          membership.role,
+
+        new_role:
+          newRole,
+      },
+    },
+  );
+
   revalidatePath(
     "/panel/usuarios",
   );
@@ -213,6 +269,12 @@ export async function updateOrganizationUserRole(
     "El rol fue actualizado correctamente.",
   );
 }
+
+/*
+ * ========================================
+ * QUITAR ACCESO
+ * ========================================
+ */
 
 export async function removeOrganizationUser(
   userId: string,
@@ -237,9 +299,9 @@ export async function removeOrganizationUser(
   }
 
   /*
-   * Evitamos que una persona se
-   * quite accidentalmente su
-   * propio acceso.
+   * Evitamos que una persona
+   * se quite accidentalmente
+   * su propio acceso.
    */
   if (
     userId ===
@@ -287,8 +349,8 @@ export async function removeOrganizationUser(
   }
 
   /*
-   * Nunca quitamos un owner
-   * utilizando esta acción.
+   * Nunca quitamos al owner
+   * mediante esta acción.
    */
   if (
     membership.role ===
@@ -324,6 +386,37 @@ export async function removeOrganizationUser(
   }
 
   /*
+   * Auditoría.
+   *
+   * Guardamos el rol que tenía
+   * antes de quitarle el acceso.
+   */
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "user.access_removed",
+
+      entityType:
+        "user",
+
+      entityId:
+        userId,
+
+      summary:
+        "Quitó el acceso de un usuario al club.",
+
+      metadata: {
+        target_user_id:
+          userId,
+
+        previous_role:
+          membership.role,
+      },
+    },
+  );
+
+  /*
    * MUY IMPORTANTE:
    *
    * NO hacemos:
@@ -331,8 +424,12 @@ export async function removeOrganizationUser(
    * supabase.auth.admin.deleteUser(...)
    *
    * porque solamente queremos
-   * quitar la relación con este
-   * club/organización.
+   * quitar la relación del usuario
+   * con esta organización.
+   *
+   * Su cuenta de ClubSmart puede
+   * seguir existiendo y eventualmente
+   * pertenecer a otro club.
    */
 
   revalidatePath(
@@ -349,6 +446,13 @@ export async function removeOrganizationUser(
     "El usuario ya no tiene acceso a este club.",
   );
 }
+
+/*
+ * ========================================
+ * INVITAR USUARIO
+ * ========================================
+ */
+
 export async function inviteOrganizationUser(
   formData: FormData,
 ): Promise<void> {
@@ -400,9 +504,15 @@ export async function inviteOrganizationUser(
   const supabase =
     createAdminClient();
 
+  /*
+   * Primero enviamos la invitación
+   * mediante Supabase Auth.
+   */
   const {
-    data: invitationData,
-    error: invitationError,
+    data:
+      invitationData,
+    error:
+      invitationError,
   } =
     await supabase.auth.admin.inviteUserByEmail(
       email,
@@ -440,12 +550,24 @@ export async function inviteOrganizationUser(
   const invitedUserId =
     invitationData.user.id;
 
+  /*
+   * Verificamos que no exista
+   * ya una vinculación con
+   * esta organización.
+   */
   const {
-    data: existingMembership,
-    error: existingMembershipError,
+    data:
+      existingMembership,
+    error:
+      existingMembershipError,
   } = await supabase
-    .from("organization_users")
-    .select("user_id, role")
+    .from(
+      "organization_users",
+    )
+    .select(`
+      user_id,
+      role
+    `)
     .eq(
       "organization_id",
       context.organizationId,
@@ -465,17 +587,26 @@ export async function inviteOrganizationUser(
     );
   }
 
-  if (existingMembership) {
+  if (
+    existingMembership
+  ) {
     redirectToUsers(
       "error",
       "Ese usuario ya pertenece a este club.",
     );
   }
 
+  /*
+   * Vinculamos la cuenta
+   * con la organización.
+   */
   const {
-    error: membershipError,
+    error:
+      membershipError,
   } = await supabase
-    .from("organization_users")
+    .from(
+      "organization_users",
+    )
     .insert({
       organization_id:
         context.organizationId,
@@ -486,7 +617,17 @@ export async function inviteOrganizationUser(
       role,
     });
 
-  if (membershipError) {
+  if (
+    membershipError
+  ) {
+    /*
+     * La invitación acaba de ser
+     * creada dentro de este flujo.
+     *
+     * Si no podemos vincularla
+     * con el club, evitamos dejar
+     * una cuenta huérfana.
+     */
     await supabase.auth.admin.deleteUser(
       invitedUserId,
     );
@@ -497,8 +638,45 @@ export async function inviteOrganizationUser(
     );
   }
 
+  /*
+   * Auditoría.
+   */
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "user.invited",
+
+      entityType:
+        "user",
+
+      entityId:
+        invitedUserId,
+
+      entityLabel:
+        email,
+
+      summary:
+        `Invitó a "${email}" con rol "${role}".`,
+
+      metadata: {
+        email,
+
+        role,
+
+        invited_user_id:
+          invitedUserId,
+      },
+    },
+  );
+
   revalidatePath(
     "/panel/usuarios",
+  );
+
+  revalidatePath(
+    "/panel",
+    "layout",
   );
 
   redirectToUsers(

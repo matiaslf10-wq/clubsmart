@@ -8,6 +8,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   canManageMembers,
 } from "@/lib/auth/permissions";
+import {
+  writeAuditLog,
+} from "@/lib/audit/write-audit-log";
 
 export type MemberFormState = {
   error: string | null;
@@ -538,6 +541,42 @@ export async function createMember(
     };
   }
 
+  await writeAuditLog(
+  context,
+  {
+    action:
+      "member.created",
+
+    entityType:
+      "member",
+
+    entityId:
+      member.id,
+
+    entityLabel:
+      `${payload.firstName} ${payload.lastName}`,
+
+    summary:
+      `Creó a la persona "${payload.firstName} ${payload.lastName}".`,
+
+    metadata: {
+      dni:
+        payload.dni,
+
+      activity_ids:
+        payload.activityIds,
+
+      email:
+        payload.email ||
+        null,
+
+      phone:
+        payload.phone ||
+        null,
+    },
+  },
+);
+
   revalidateMemberPages();
 
   redirect("/panel/personas");
@@ -685,6 +724,42 @@ export async function updateMember(
     };
   }
 
+  await writeAuditLog(
+  context,
+  {
+    action:
+      "member.updated",
+
+    entityType:
+      "member",
+
+    entityId:
+      memberId,
+
+    entityLabel:
+      `${payload.firstName} ${payload.lastName}`,
+
+    summary:
+      `Actualizó los datos de "${payload.firstName} ${payload.lastName}".`,
+
+    metadata: {
+      dni:
+        payload.dni,
+
+      activity_ids:
+        payload.activityIds,
+
+      email:
+        payload.email ||
+        null,
+
+      phone:
+        payload.phone ||
+        null,
+    },
+  },
+);
+
   revalidateMemberPages(memberId);
 
   redirect("/panel/personas");
@@ -711,7 +786,11 @@ export async function deactivateMember(
     error: memberReadError,
   } = await supabase
     .from("members")
-    .select("id")
+    .select(`
+  id,
+  first_name,
+  last_name
+`)
     .eq("id", memberId)
     .eq(
       "organization_id",
@@ -780,6 +859,26 @@ export async function deactivateMember(
     };
   }
 
+  await writeAuditLog(
+  context,
+  {
+    action:
+      "member.deactivated",
+
+    entityType:
+      "member",
+
+    entityId:
+      memberId,
+
+    entityLabel:
+      `${member.first_name} ${member.last_name}`,
+
+    summary:
+      `Dio de baja a "${member.first_name} ${member.last_name}".`,
+  },
+);
+
   revalidateMemberPages(memberId);
 
   return {
@@ -803,38 +902,87 @@ export async function reactivateMember(
 
   const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("members")
-    .update({
-      active: true,
-      inactive_at: null,
-      inactive_reason: null,
-    })
-    .eq("id", memberId)
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq("club_id", context.clubId);
+ const {
+  data: member,
+  error,
+} = await supabase
+  .from("members")
+  .update({
+    active: true,
+    inactive_at: null,
+    inactive_reason: null,
+  })
+  .eq(
+    "id",
+    memberId,
+  )
+  .eq(
+    "organization_id",
+    context.organizationId,
+  )
+  .eq(
+    "club_id",
+    context.clubId,
+  )
+  .select(`
+    id,
+    first_name,
+    last_name
+  `)
+  .maybeSingle();
 
-  if (error) {
-    return {
-      error: `No fue posible reactivar a la persona: ${error.message}`,
-    };
-  }
-
-  revalidateMemberPages(memberId);
-
+if (
+  error ||
+  !member
+) {
   return {
-    error: null,
+    error:
+      `No fue posible reactivar a la persona: ${
+        error?.message ??
+        "La persona no existe o no pertenece al club."
+      }`,
   };
+}
+
+await writeAuditLog(
+  context,
+  {
+    action:
+      "member.reactivated",
+
+    entityType:
+      "member",
+
+    entityId:
+      memberId,
+
+    entityLabel:
+      `${member.first_name} ${member.last_name}`,
+
+    summary:
+      `Reactivó a "${member.first_name} ${member.last_name}".`,
+  },
+);
+
+revalidateMemberPages(
+  memberId,
+);
+
+return {
+  error: null,
+};
 }
 
 function revalidateMemberPages(
   memberId?: string,
 ) {
-  revalidatePath("/panel");
-  revalidatePath("/panel/personas");
+  revalidatePath(
+    "/panel",
+  );
+
+  revalidatePath(
+    "/panel/personas",
+  );
 
   if (memberId) {
     revalidatePath(

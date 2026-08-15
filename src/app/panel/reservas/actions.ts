@@ -32,6 +32,10 @@ import {
   canManageReservations,
 } from "@/lib/auth/permissions";
 
+import {
+  writeAuditLog,
+} from "@/lib/audit/write-audit-log";
+
 function readText(
   formData: FormData,
   field: string,
@@ -651,9 +655,15 @@ export async function createManualReservation(
 
       created_at: now,
       updated_at: now,
+      
     })
-    .select("id")
-    .single();
+
+    
+    .select(`
+  id,
+  reservation_code
+`)
+.single();
 
   if (
     insertError ||
@@ -685,6 +695,64 @@ export async function createManualReservation(
       selectedDate,
     );
   }
+
+  await writeAuditLog(
+  context,
+  {
+    action:
+      "reservation.created",
+
+    entityType:
+      "reservation",
+
+    entityId:
+      reservation.id,
+
+    entityLabel:
+      reservation.reservation_code,
+
+    summary:
+      `Creó la reserva ${reservation.reservation_code} para "${customerName}".`,
+
+    metadata: {
+      reservation_code:
+        reservation.reservation_code,
+
+      customer_name:
+        customerName,
+
+      member_id:
+        finalMemberId,
+
+      space_id:
+        space.id,
+
+      space_name:
+        space.name,
+
+      reservation_date:
+        selectedSlot.startDate,
+
+      reservation_end_date:
+        selectedSlot.endDate,
+
+      start_time:
+        selectedSlot.startTime,
+
+      end_time:
+        selectedSlot.endTime,
+
+      status:
+        automaticConfirmation
+          ? "confirmed"
+          : "pending",
+
+      amount,
+      deposit_amount:
+        depositAmount,
+    },
+  },
+);
 
   revalidatePath(
     "/panel/reservas",
@@ -789,9 +857,11 @@ async function updateReservationStatus({
       "space_reservations",
     )
     .select(`
-      id,
-      status
-    `)
+  id,
+  reservation_code,
+  customer_name,
+  status
+`)
     .eq(
       "id",
       reservationId,
@@ -898,6 +968,58 @@ async function updateReservationStatus({
       "No fue posible modificar la reserva. Es posible que haya cambiado mientras la estabas revisando.",
     );
   }
+
+  const actionByStatus = {
+  confirmed:
+    "reservation.confirmed",
+
+  rejected:
+    "reservation.rejected",
+
+  cancelled:
+    "reservation.cancelled",
+} as const;
+
+const verbByStatus = {
+  confirmed:
+    "Confirmó",
+
+  rejected:
+    "Rechazó",
+
+  cancelled:
+    "Canceló",
+} as const;
+
+await writeAuditLog(
+  context,
+  {
+    action:
+      actionByStatus[
+        nextStatus
+      ],
+
+    entityType:
+      "reservation",
+
+    entityId:
+      reservation.id,
+
+    entityLabel:
+      reservation.reservation_code,
+
+    summary:
+      `${verbByStatus[nextStatus]} la reserva ${reservation.reservation_code} de "${reservation.customer_name}".`,
+
+    metadata: {
+      previous_status:
+        reservation.status,
+
+      new_status:
+        nextStatus,
+    },
+  },
+);
 
   revalidatePath(
   "/panel/reservas",
@@ -1254,11 +1376,13 @@ export async function recordManualReservationPayment(
       "space_reservations",
     )
     .select(`
-      id,
-      status,
-      amount,
-      paid_amount
-    `)
+  id,
+  reservation_code,
+  customer_name,
+  status,
+  amount,
+  paid_amount
+`)
     .eq(
       "id",
       reservationId,
@@ -1335,78 +1459,81 @@ export async function recordManualReservationPayment(
     new Date().toISOString();
 
   const {
-    error: paymentError,
-  } = await supabase
-    .from(
-      "reservation_payments",
-    )
-    .insert({
-      organization_id:
-        context.organizationId,
+  data: payment,
+  error: paymentError,
+} = await supabase
+  .from(
+    "reservation_payments",
+  )
+  .insert({
+    organization_id:
+      context.organizationId,
 
-      club_id:
-        context.clubId,
+    club_id:
+      context.clubId,
 
-      reservation_id:
-        reservationId,
-
-      amount,
-
-      status:
-        "approved",
-
-      source:
-        "manual",
-
-      payment_method:
-        paymentMethod,
-
-      /*
-       * Aunque el administrador
-       * seleccione Mercado Pago o
-       * Pago TIC como medio, sigue
-       * siendo una carga manual.
-       *
-       * provider se usará cuando
-       * el pago provenga realmente
-       * de la API/webhook.
-       */
-      provider: null,
-
-      provider_payment_id:
-        null,
-
-      external_reference:
-        externalReference ||
-        null,
-
-      provider_status:
-        null,
-
-      paid_at: now,
-
-      notes:
-        notes || null,
-
-      metadata: {
-        registered_manually:
-          true,
-      },
-
-      created_by_user_id:
-        context.userId,
-
-      created_at: now,
-      updated_at: now,
-    });
-
-  if (paymentError) {
-    redirectToReservation(
+    reservation_id:
       reservationId,
-      "error",
-      `No fue posible registrar el pago: ${paymentError.message}`,
-    );
-  }
+
+    amount,
+
+    status:
+      "approved",
+
+    source:
+      "manual",
+
+    payment_method:
+      paymentMethod,
+
+    provider: null,
+
+    provider_payment_id:
+      null,
+
+    external_reference:
+      externalReference ||
+      null,
+
+    provider_status:
+      null,
+
+    paid_at:
+      now,
+
+    notes:
+      notes || null,
+
+    metadata: {
+      registered_manually:
+        true,
+    },
+
+    created_by_user_id:
+      context.userId,
+
+    created_at:
+      now,
+
+    updated_at:
+      now,
+  })
+  .select("id")
+  .single();
+
+if (
+  paymentError ||
+  !payment
+) {
+  redirectToReservation(
+    reservationId,
+    "error",
+    `No fue posible registrar el pago: ${
+      paymentError?.message ??
+      "Error desconocido"
+    }`,
+  );
+}
 
   revalidatePath(
     `/panel/reservas/${reservationId}`,
@@ -1469,117 +1596,182 @@ export async function cancelManualReservationPayment(
     createAdminClient();
 
   const {
-    data: payment,
-    error: paymentError,
-  } = await supabase
-    .from(
-      "reservation_payments",
-    )
-    .select(`
-      id,
-      reservation_id,
-      source,
-      status
-    `)
-    .eq(
-      "id",
-      paymentId,
-    )
-    .eq(
-      "reservation_id",
-      reservationId,
-    )
-    .eq(
-      "organization_id",
-      context.organizationId,
-    )
-    .eq(
-      "club_id",
-      context.clubId,
-    )
-    .maybeSingle();
+  data: payment,
+  error: paymentError,
+} = await supabase
+  .from(
+    "reservation_payments",
+  )
+  .select(`
+    id,
+    reservation_id,
+    source,
+    status,
+    amount,
+    payment_method
+  `)
+  .eq(
+    "id",
+    paymentId,
+  )
+  .eq(
+    "reservation_id",
+    reservationId,
+  )
+  .eq(
+    "organization_id",
+    context.organizationId,
+  )
+  .eq(
+    "club_id",
+    context.clubId,
+  )
+  .maybeSingle();
 
-  if (
-    paymentError ||
-    !payment
-  ) {
-    redirectToReservation(
-      reservationId,
-      "error",
-      "El pago no existe.",
-    );
-  }
-
-  if (
-    payment.source !==
-      "manual" ||
-    payment.status !==
-      "approved"
-  ) {
-    redirectToReservation(
-      reservationId,
-      "error",
-      "Solamente pueden anularse pagos manuales aprobados.",
-    );
-  }
-
-  const now =
-    new Date().toISOString();
-
-  const {
-    data: updatedPayment,
-    error: updateError,
-  } = await supabase
-    .from(
-      "reservation_payments",
-    )
-    .update({
-      status:
-        "cancelled",
-
-      cancelled_at:
-        now,
-
-      updated_at:
-        now,
-    })
-    .eq(
-      "id",
-      paymentId,
-    )
-    .eq(
-      "status",
-      "approved",
-    )
-    .select("id")
-    .maybeSingle();
-
-  if (
-    updateError ||
-    !updatedPayment
-  ) {
-    redirectToReservation(
-      reservationId,
-      "error",
-      "No fue posible anular el pago.",
-    );
-  }
-
-  revalidatePath(
-    `/panel/reservas/${reservationId}`,
-  );
-
-  revalidatePath(
-    "/panel/reservas",
-  );
-
-  revalidatePath(
-    "/panel/reservas/pendientes",
-  );
-
+ if (
+  paymentError ||
+  !payment
+) {
   redirectToReservation(
     reservationId,
-    "success",
-    "El pago fue anulado y el saldo de la reserva fue recalculado.",
+    "error",
+    "El pago no existe.",
   );
+}
+
+if (
+  payment.source !==
+    "manual" ||
+  payment.status !==
+    "approved"
+) {
+  redirectToReservation(
+    reservationId,
+    "error",
+    "Solamente pueden anularse pagos manuales aprobados.",
+  );
+}
+
+const now =
+  new Date().toISOString();
+
+const {
+  data: updatedPayment,
+  error: updateError,
+} = await supabase
+  .from(
+    "reservation_payments",
+  )
+  .update({
+    status:
+      "cancelled",
+
+    cancelled_at:
+      now,
+
+    updated_at:
+      now,
+  })
+  .eq(
+    "id",
+    paymentId,
+  )
+  .eq(
+    "reservation_id",
+    reservationId,
+  )
+  .eq(
+    "organization_id",
+    context.organizationId,
+  )
+  .eq(
+    "club_id",
+    context.clubId,
+  )
+  .eq(
+    "status",
+    "approved",
+  )
+  .select("id")
+  .maybeSingle();
+
+if (
+  updateError ||
+  !updatedPayment
+) {
+  redirectToReservation(
+    reservationId,
+    "error",
+    "No fue posible anular el pago.",
+  );
+}
+
+/*
+ * Auditoría.
+ */
+await writeAuditLog(
+  context,
+  {
+    action:
+      "reservation_payment.cancelled",
+
+    entityType:
+      "payment",
+
+    entityId:
+      paymentId,
+
+    entityLabel:
+      `Pago de reserva ${reservationId}`,
+
+    summary:
+      `Anuló un pago manual de reserva por $${Number(
+        payment.amount,
+      ).toLocaleString(
+        "es-AR",
+      )}.`,
+
+    metadata: {
+      reservation_id:
+        reservationId,
+
+      amount:
+        Number(
+          payment.amount,
+        ),
+
+      payment_method:
+        payment.payment_method,
+
+      previous_status:
+        "approved",
+
+      new_status:
+        "cancelled",
+    },
+  },
+);
+
+revalidatePath(
+  `/panel/reservas/${reservationId}`,
+);
+
+revalidatePath(
+  "/panel/reservas",
+);
+
+revalidatePath(
+  "/panel/reservas/pendientes",
+);
+
+revalidatePath(
+  "/panel",
+  "layout",
+);
+
+redirectToReservation(
+  reservationId,
+  "success",
+  "El pago fue anulado y el saldo de la reserva fue recalculado.",
+);
 }
