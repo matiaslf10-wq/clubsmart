@@ -25,10 +25,6 @@ type AudienceType =
   | "activity"
   | "reservation";
 
-  type DeliveryChannel =
-  | "email"
-  | "whatsapp";
-
 type RecipientRow = {
   member_id: string | null;
   reservation_id: string | null;
@@ -52,30 +48,6 @@ function readText(
     : "";
 }
 
-function readDeliveryChannels(
-  formData: FormData,
-): DeliveryChannel[] {
-  const values =
-    formData.getAll(
-      "channels",
-    );
-
-  const channels =
-    values.filter(
-      (
-        value,
-      ): value is DeliveryChannel =>
-        value === "email" ||
-        value === "whatsapp",
-    );
-
-  return [
-    ...new Set(
-      channels,
-    ),
-  ];
-}
-
 function isUuid(
   value: string,
 ) {
@@ -88,12 +60,9 @@ function isAudienceType(
   value: string,
 ): value is AudienceType {
   return (
-    value ===
-      "all_members" ||
-    value ===
-      "activity" ||
-    value ===
-      "reservation"
+    value === "all_members" ||
+    value === "activity" ||
+    value === "reservation"
   );
 }
 
@@ -172,11 +141,6 @@ export async function createNotification(
       "body",
     );
 
-    const deliveryChannels =
-  readDeliveryChannels(
-    formData,
-  );
-
   if (
     !isAudienceType(
       audienceType,
@@ -224,16 +188,6 @@ export async function createNotification(
     );
   }
 
-if (
-  deliveryChannels.length ===
-  0
-) {
-  redirectToNewNotification(
-    "error",
-    "Seleccioná al menos un canal de comunicación.",
-  );
-}
-
   const supabase =
     createAdminClient();
 
@@ -247,9 +201,9 @@ if (
     string | null = null;
 
   /*
-   * ======================================
+   * =====================================
    * ACTIVIDAD
-   * ======================================
+   * =====================================
    */
   if (
     audienceType ===
@@ -264,18 +218,15 @@ if (
       );
     }
 
-    /*
-     * Primero verificamos que la actividad
-     * realmente pertenezca al club.
-     */
     const {
       data: activity,
       error: activityError,
     } = await supabase
       .from("activities")
-      .select(
-        "id, name",
-      )
+      .select(`
+        id,
+        name
+      `)
       .eq(
         "id",
         activityId,
@@ -322,8 +273,20 @@ if (
         )
       `)
       .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      )
+      .eq(
         "activity_id",
         activityId,
+      )
+      .eq(
+        "active",
+        true,
       );
 
     if (
@@ -335,9 +298,6 @@ if (
       );
     }
 
-    /*
-     * Map evita duplicados por miembro.
-     */
     const recipientMap =
       new Map<
         string,
@@ -372,22 +332,13 @@ if (
           recipient_name:
             `${member.first_name} ${member.last_name}`.trim(),
 
-          /*
-           * Por ahora no asumimos
-           * que members tenga email
-           * o teléfono.
-           *
-           * Más adelante los canales
-           * de entrega se resolverán
-           * desde el perfil/contacto.
-           */
           recipient_email:
-  member.email ??
-  null,
+            member.email ??
+            null,
 
-recipient_phone:
-  member.phone ??
-  null,
+          recipient_phone:
+            member.phone ??
+            null,
         },
       );
     }
@@ -402,9 +353,9 @@ recipient_phone:
   }
 
   /*
-   * ======================================
+   * =====================================
    * RESERVA
-   * ======================================
+   * =====================================
    */
   if (
     audienceType ===
@@ -486,9 +437,9 @@ recipient_phone:
   }
 
   /*
-   * ======================================
+   * =====================================
    * TODO EL CLUB
-   * ======================================
+   * =====================================
    */
   if (
     audienceType ===
@@ -548,12 +499,12 @@ recipient_phone:
             `${member.first_name} ${member.last_name}`.trim(),
 
           recipient_email:
-  member.email ??
-  null,
+            member.email ??
+            null,
 
-recipient_phone:
-  member.phone ??
-  null,
+          recipient_phone:
+            member.phone ??
+            null,
         }),
       );
   }
@@ -567,52 +518,13 @@ recipient_phone:
     );
   }
 
-  const emailRecipientCount =
-  recipients.filter(
-    (recipient) =>
-      Boolean(
-        recipient.recipient_email,
-      ),
-  ).length;
-
-const whatsappRecipientCount =
-  recipients.filter(
-    (recipient) =>
-      Boolean(
-        recipient.recipient_phone,
-      ),
-  ).length;
-
-const plannedDeliveryCount =
-  (
-    deliveryChannels.includes(
-      "email",
-    )
-      ? emailRecipientCount
-      : 0
-  ) +
-  (
-    deliveryChannels.includes(
-      "whatsapp",
-    )
-      ? whatsappRecipientCount
-      : 0
-  );
-
-if (
-  plannedDeliveryCount === 0
-) {
-  redirectToNewNotification(
-    "error",
-    "Ninguno de los destinatarios tiene datos de contacto para los canales seleccionados.",
-  );
-}
-
   const now =
     new Date().toISOString();
 
   /*
-   * Primero creamos la notificación.
+   * =====================================
+   * NOTIFICACIÓN
+   * =====================================
    */
   const {
     data:
@@ -653,18 +565,16 @@ if (
         now,
 
       metadata: {
-  recipient_count:
-    recipients.length,
+        recipient_count:
+          recipients.length,
 
-  delivery_channels:
-    deliveryChannels,
+        delivery_channels: [
+          "in_app",
+        ],
 
-  email_recipient_count:
-    emailRecipientCount,
-
-  whatsapp_recipient_count:
-    whatsappRecipientCount,
-},
+        delivery_mode:
+          "future_clubsmart_app",
+      },
 
       created_at:
         now,
@@ -686,8 +596,9 @@ if (
   }
 
   /*
-   * Después congelamos quiénes eran
-   * los destinatarios en ese momento.
+   * =====================================
+   * DESTINATARIOS
+   * =====================================
    */
   const recipientRows =
     recipients.map(
@@ -710,6 +621,11 @@ if (
         recipient_name:
           recipient.recipient_name,
 
+        /*
+         * Conservamos estos datos como
+         * snapshot aunque actualmente
+         * no enviemos email/WhatsApp.
+         */
         recipient_email:
           recipient.recipient_email,
 
@@ -719,31 +635,26 @@ if (
     );
 
   const {
-  data:
-    savedRecipients,
-  error:
-    recipientsError,
-} = await supabase
-  .from(
-    "club_notification_recipients",
-  )
-  .insert(
-    recipientRows,
-  )
-  .select(`
-    id,
-    recipient_email,
-    recipient_phone
-  `);
+    data:
+      savedRecipients,
+    error:
+      recipientsError,
+  } = await supabase
+    .from(
+      "club_notification_recipients",
+    )
+    .insert(
+      recipientRows,
+    )
+    .select(`
+      id,
+      member_id,
+      reservation_id
+    `);
 
   if (
     recipientsError
   ) {
-    /*
-     * Si falló la creación de destinatarios,
-     * eliminamos la notificación para evitar
-     * que quede publicada sin audiencia.
-     */
     await supabase
       .from(
         "club_notifications",
@@ -760,125 +671,89 @@ if (
     );
   }
 
-  const deliveryRows = [];
+  /*
+   * =====================================
+   * ENTREGA INTERNA CLUBSMART
+   * =====================================
+   *
+   * Por ahora estas filas quedan pending.
+   *
+   * Cuando exista la app/PWA:
+   *
+   * member
+   *   ↓
+   * profile ClubSmart
+   *   ↓
+   * bandeja
+   *   ↓
+   * push FCM
+   */
+  const deliveryRows =
+    (savedRecipients ?? []).map(
+      (recipient) => ({
+        organization_id:
+          context.organizationId,
 
-for (
-  const recipient of
-    savedRecipients ?? []
-) {
-  if (
-    deliveryChannels.includes(
-      "email",
-    ) &&
-    recipient.recipient_email
-  ) {
-    deliveryRows.push({
-      organization_id:
-        context.organizationId,
+        club_id:
+          context.clubId,
 
-      club_id:
-        context.clubId,
+        notification_id:
+          notification.id,
 
-      notification_id:
-        notification.id,
+        recipient_id:
+          recipient.id,
 
-      recipient_id:
-        recipient.id,
+        channel:
+          "in_app",
 
-      channel:
-        "email",
+        status:
+          "pending",
 
-      status:
-        "pending",
+        destination:
+          null,
 
-      destination:
-        recipient.recipient_email,
+        metadata: {
+          delivery_mode:
+            "future_clubsmart_app",
 
-      metadata: {},
-    });
-  }
+          member_id:
+            recipient.member_id,
 
-  if (
-    deliveryChannels.includes(
-      "whatsapp",
-    ) &&
-    recipient.recipient_phone
-  ) {
-    deliveryRows.push({
-      organization_id:
-        context.organizationId,
-
-      club_id:
-        context.clubId,
-
-      notification_id:
-        notification.id,
-
-      recipient_id:
-        recipient.id,
-
-      channel:
-        "whatsapp",
-
-      status:
-        "pending",
-
-      destination:
-        recipient.recipient_phone,
-
-      metadata: {},
-    });
-  }
-}
-
-if (
-  deliveryRows.length === 0
-) {
-  await supabase
-    .from(
-      "club_notifications",
-    )
-    .delete()
-    .eq(
-      "id",
-      notification.id,
+          reservation_id:
+            recipient.reservation_id,
+        },
+      }),
     );
 
-  redirectToNewNotification(
-    "error",
-    "No fue posible generar ninguna entrega para los canales seleccionados.",
-  );
-}
-
-const {
-  error:
-    deliveriesError,
-} = await supabase
-  .from(
-    "notification_deliveries",
-  )
-  .insert(
-    deliveryRows,
-  );
-
-if (
-  deliveriesError
-) {
-  await supabase
+  const {
+    error:
+      deliveriesError,
+  } = await supabase
     .from(
-      "club_notifications",
+      "notification_deliveries",
     )
-    .delete()
-    .eq(
-      "id",
-      notification.id,
+    .insert(
+      deliveryRows,
     );
 
-  redirectToNewNotification(
-    "error",
-    `No fue posible preparar las entregas: ${deliveriesError.message}`,
-  );
-}
+  if (
+    deliveriesError
+  ) {
+    await supabase
+      .from(
+        "club_notifications",
+      )
+      .delete()
+      .eq(
+        "id",
+        notification.id,
+      );
+
+    redirectToNewNotification(
+      "error",
+      `No fue posible preparar las notificaciones internas: ${deliveriesError.message}`,
+    );
+  }
 
   revalidatePath(
     "/panel/notificaciones",
@@ -892,14 +767,10 @@ if (
   redirect(
     `/panel/notificaciones?success=${encodeURIComponent(
       `Notificación publicada para ${recipients.length} ${
-  recipients.length === 1
-    ? "persona"
-    : "personas"
-}. ${deliveryRows.length} ${
-  deliveryRows.length === 1
-    ? "entrega preparada"
-    : "entregas preparadas"
-}.`
+        recipients.length === 1
+          ? "persona"
+          : "personas"
+      }.`,
     )}`,
   );
 }

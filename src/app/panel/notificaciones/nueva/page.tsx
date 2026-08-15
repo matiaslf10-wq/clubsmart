@@ -401,69 +401,32 @@ export default async function NewNotificationPage({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-  <h2 className="text-xl font-bold text-slate-900">
-    Canales de comunicación
-  </h2>
+        <section className="rounded-2xl border border-blue-200 bg-blue-50 p-6">
+  <div className="flex gap-4">
+    <div className="text-2xl">
+      🔔
+    </div>
 
-  <p className="mt-2 text-sm leading-6 text-slate-600">
-    Elegí cómo querés contactar a
-    los destinatarios. ClubSmart
-    utilizará solamente los datos
-    disponibles de cada persona.
-  </p>
+    <div>
+      <h2 className="font-bold text-slate-900">
+        Notificación ClubSmart
+      </h2>
 
-  <div className="mt-6 grid gap-4 md:grid-cols-2">
-    <label className="flex cursor-pointer gap-4 rounded-xl border border-slate-200 p-5 transition hover:bg-slate-50">
-      <input
-        type="checkbox"
-        name="channels"
-        value="email"
-        defaultChecked
-        className="mt-1 h-4 w-4"
-      />
+      <p className="mt-2 text-sm leading-6 text-slate-700">
+        La comunicación quedará
+        registrada para las personas
+        seleccionadas.
+      </p>
 
-      <div>
-        <p className="font-semibold text-slate-900">
-          Email
-        </p>
-
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          Se preparará una entrega
-          para cada destinatario que
-          tenga correo electrónico.
-        </p>
-      </div>
-    </label>
-
-    <label className="flex cursor-pointer gap-4 rounded-xl border border-slate-200 p-5 transition hover:bg-slate-50">
-      <input
-        type="checkbox"
-        name="channels"
-        value="whatsapp"
-        className="mt-1 h-4 w-4"
-      />
-
-      <div>
-        <p className="font-semibold text-slate-900">
-          WhatsApp
-        </p>
-
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          Se preparará una entrega
-          para cada destinatario que
-          tenga celular cargado.
-        </p>
-      </div>
-    </label>
-  </div>
-
-  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-    En esta etapa ClubSmart prepara
-    y registra las entregas. El envío
-    automático se activará cuando
-    conectemos el proveedor de email
-    y la API oficial de WhatsApp.
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Cuando esté disponible la app
+        de ClubSmart, estas
+        notificaciones aparecerán en
+        la bandeja personal y podrán
+        generar avisos push en el
+        celular.
+      </p>
+    </div>
   </div>
 </section>
 
