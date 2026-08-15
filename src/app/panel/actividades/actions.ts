@@ -80,6 +80,336 @@ function isValidWhatsApp(
   );
 }
 
+function getTodayBuenosAires() {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        "America/Argentina/Buenos_Aires",
+
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    },
+  ).format(
+    new Date(),
+  );
+}
+
+function getPreviousDate(
+  dateValue: string,
+) {
+  const date =
+    new Date(
+      `${dateValue}T12:00:00Z`,
+    );
+
+  date.setUTCDate(
+    date.getUTCDate() - 1,
+  );
+
+  return date
+    .toISOString()
+    .slice(0, 10);
+}
+
+async function syncActivityFeeRate({
+  activityId,
+  price,
+  organizationId,
+  clubId,
+}: {
+  activityId: string;
+
+  price:
+    | number
+    | null;
+
+  organizationId: string;
+
+  clubId: string;
+}) {
+  const supabase =
+    createAdminClient();
+
+  const today =
+    getTodayBuenosAires();
+
+  /*
+   * Buscamos la tarifa actualmente
+   * vigente.
+   */
+  const {
+    data: currentRate,
+    error: currentRateError,
+  } = await supabase
+    .from(
+      "activity_fee_rates",
+    )
+    .select(`
+      id,
+      amount,
+      valid_from,
+      valid_to
+    `)
+    .eq(
+      "organization_id",
+      organizationId,
+    )
+    .eq(
+      "club_id",
+      clubId,
+    )
+    .eq(
+      "activity_id",
+      activityId,
+    )
+    .is(
+      "valid_to",
+      null,
+    )
+    .order(
+      "valid_from",
+      {
+        ascending:
+          false,
+      },
+    )
+    .limit(1)
+    .maybeSingle();
+
+  if (
+    currentRateError
+  ) {
+    return `No fue posible consultar la tarifa vigente: ${currentRateError.message}`;
+  }
+
+  /*
+   * Si borraron el arancel,
+   * cerramos la tarifa vigente.
+   */
+  if (
+    price === null
+  ) {
+    if (
+      !currentRate
+    ) {
+      return null;
+    }
+
+    /*
+     * Si la tarifa nació hoy,
+     * directamente la eliminamos.
+     * No tiene sentido dejar una
+     * vigencia histórica de cero días.
+     */
+    if (
+      currentRate.valid_from ===
+      today
+    ) {
+      const {
+        error:
+          deleteError,
+      } = await supabase
+        .from(
+          "activity_fee_rates",
+        )
+        .delete()
+        .eq(
+          "id",
+          currentRate.id,
+        )
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq(
+          "club_id",
+          clubId,
+        );
+
+      if (
+        deleteError
+      ) {
+        return `No fue posible eliminar la tarifa vigente: ${deleteError.message}`;
+      }
+
+      return null;
+    }
+
+    const {
+      error:
+        closeError,
+    } = await supabase
+      .from(
+        "activity_fee_rates",
+      )
+      .update({
+        valid_to:
+          getPreviousDate(
+            today,
+          ),
+      })
+      .eq(
+        "id",
+        currentRate.id,
+      )
+      .eq(
+        "organization_id",
+        organizationId,
+      )
+      .eq(
+        "club_id",
+        clubId,
+      );
+
+    if (
+      closeError
+    ) {
+      return `No fue posible cerrar la tarifa vigente: ${closeError.message}`;
+    }
+
+    return null;
+  }
+
+  /*
+   * Si ya existe exactamente
+   * el mismo importe, no hacemos nada.
+   */
+  if (
+    currentRate &&
+    Number(
+      currentRate.amount,
+    ) === price
+  ) {
+    return null;
+  }
+
+  /*
+   * Si la tarifa vigente fue creada
+   * hoy, simplemente modificamos
+   * su importe.
+   *
+   * Esto evita crear dos tarifas
+   * con la misma fecha de inicio.
+   */
+  if (
+    currentRate &&
+    currentRate.valid_from ===
+      today
+  ) {
+    const {
+      error:
+        updateError,
+    } = await supabase
+      .from(
+        "activity_fee_rates",
+      )
+      .update({
+        amount:
+          price,
+      })
+      .eq(
+        "id",
+        currentRate.id,
+      )
+      .eq(
+        "organization_id",
+        organizationId,
+      )
+      .eq(
+        "club_id",
+        clubId,
+      );
+
+    if (
+      updateError
+    ) {
+      return `No fue posible actualizar la tarifa: ${updateError.message}`;
+    }
+
+    return null;
+  }
+
+  /*
+   * Si había una tarifa anterior,
+   * cerramos su vigencia ayer.
+   */
+  if (
+    currentRate
+  ) {
+    const {
+      error:
+        closeError,
+    } = await supabase
+      .from(
+        "activity_fee_rates",
+      )
+      .update({
+        valid_to:
+          getPreviousDate(
+            today,
+          ),
+      })
+      .eq(
+        "id",
+        currentRate.id,
+      )
+      .eq(
+        "organization_id",
+        organizationId,
+      )
+      .eq(
+        "club_id",
+        clubId,
+      );
+
+    if (
+      closeError
+    ) {
+      return `No fue posible cerrar la tarifa anterior: ${closeError.message}`;
+    }
+  }
+
+  /*
+   * Creamos la nueva tarifa vigente.
+   */
+  const {
+    error:
+      insertError,
+  } = await supabase
+    .from(
+      "activity_fee_rates",
+    )
+    .insert({
+      organization_id:
+        organizationId,
+
+      club_id:
+        clubId,
+
+      activity_id:
+        activityId,
+
+      amount:
+        price,
+
+      valid_from:
+        today,
+
+      valid_to:
+        null,
+    });
+
+  if (
+    insertError
+  ) {
+    return `No fue posible crear la nueva tarifa: ${insertError.message}`;
+  }
+
+  return null;
+}
+
 function readActivityPayload(
   formData: FormData,
 ):
@@ -412,6 +742,9 @@ export async function createActivity(
       1;
   }
 
+  /*
+   * Creamos la actividad.
+   */
   const {
     data:
       activity,
@@ -460,6 +793,13 @@ export async function createActivity(
       level:
         payload.level,
 
+      /*
+       * Conservamos también el precio
+       * actual en activities.
+       *
+       * El historial real queda en
+       * activity_fee_rates.
+       */
       price:
         payload.price,
 
@@ -499,6 +839,9 @@ export async function createActivity(
     };
   }
 
+  /*
+   * Guardamos los horarios.
+   */
   const schedulesToInsert =
     payload.schedules.map(
       (
@@ -546,9 +889,8 @@ export async function createActivity(
     scheduleError
   ) {
     /*
-     * Si no pudimos crear los horarios,
-     * revertimos la actividad para no
-     * dejar una actividad incompleta.
+     * Si fallan los horarios,
+     * revertimos la actividad.
      */
     await supabase
       .from(
@@ -571,6 +913,83 @@ export async function createActivity(
     return {
       error:
         `No fue posible guardar los horarios: ${scheduleError.message}`,
+    };
+  }
+
+  /*
+   * IMPORTANTE:
+   *
+   * Recién AHORA existen:
+   *
+   * - payload
+   * - supabase
+   * - activity.id
+   *
+   * Por eso la sincronización del
+   * arancel tiene que ir acá.
+   */
+  const feeRateError =
+    await syncActivityFeeRate({
+      activityId:
+        activity.id,
+
+      price:
+        payload.price,
+
+      organizationId:
+        context.organizationId,
+
+      clubId:
+        context.clubId,
+    });
+
+  if (
+    feeRateError
+  ) {
+    /*
+     * Si no podemos guardar la tarifa
+     * inicial, revertimos los horarios
+     * y la actividad recién creada.
+     */
+    await supabase
+      .from(
+        "activity_schedules",
+      )
+      .delete()
+      .eq(
+        "activity_id",
+        activity.id,
+      )
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      );
+
+    await supabase
+      .from(
+        "activities",
+      )
+      .delete()
+      .eq(
+        "id",
+        activity.id,
+      )
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      );
+
+    return {
+      error:
+        `No fue posible guardar el arancel: ${feeRateError}`,
     };
   }
 
