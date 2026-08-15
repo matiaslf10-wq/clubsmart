@@ -20,6 +20,10 @@ import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
+import {
+  writeAuditLog,
+} from "@/lib/audit/write-audit-log";
+
 type AudienceType =
   | "all_members"
   | "activity"
@@ -754,6 +758,50 @@ export async function createNotification(
       `No fue posible preparar las notificaciones internas: ${deliveriesError.message}`,
     );
   }
+
+  await writeAuditLog(
+  context,
+  {
+    action:
+      "notification.published",
+
+    entityType:
+      "notification",
+
+    entityId:
+      notification.id,
+
+    entityLabel:
+      title,
+
+    summary:
+      `Publicó la notificación "${title}" para ${
+        recipients.length
+      } ${
+        recipients.length ===
+        1
+          ? "persona"
+          : "personas"
+      }.`,
+
+    metadata: {
+      audience_type:
+        audienceType,
+
+      activity_id:
+        notificationActivityId,
+
+      reservation_id:
+        notificationReservationId,
+
+      recipient_count:
+        recipients.length,
+
+      delivery_channel:
+        "in_app",
+    },
+  },
+);
 
   revalidatePath(
     "/panel/notificaciones",

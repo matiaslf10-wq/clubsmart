@@ -9,8 +9,7 @@ import {
 } from "@/app/panel/reservas/pending-reservations-link";
 import {
   canManageUsers,
-} from "@/lib/auth/permissions";
-import {
+  canViewAudit,
   canViewNotifications,
 } from "@/lib/auth/permissions";
 
@@ -93,6 +92,17 @@ export default async function PanelLayout({
     className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
   >
     Usuarios
+  </Link>
+) : null}
+
+{canViewAudit(
+  context.role,
+) ? (
+  <Link
+    href="/panel/auditoria"
+    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+  >
+    Auditoría
   </Link>
 ) : null}
 

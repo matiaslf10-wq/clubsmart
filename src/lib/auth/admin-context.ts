@@ -10,6 +10,7 @@ type OrganizationRole =
 
 export type AdminContext = {
   userId: string;
+  userEmail: string | null;
   organizationId: string;
   organizationName: string;
   role: OrganizationRole;
@@ -28,6 +29,11 @@ export async function getAdminContext(): Promise<AdminContext> {
     typeof claimsData?.claims.sub === "string"
       ? claimsData.claims.sub
       : null;
+
+      const userEmail =
+  typeof claimsData?.claims.email === "string"
+    ? claimsData.claims.email
+    : null;
 
   if (claimsError || !userId) {
     redirect("/login");
@@ -98,6 +104,7 @@ export async function getAdminContext(): Promise<AdminContext> {
 
   return {
     userId,
+    userEmail,
     organizationId: organization.id,
     organizationName: organization.name,
     role: membership.role as OrganizationRole,
