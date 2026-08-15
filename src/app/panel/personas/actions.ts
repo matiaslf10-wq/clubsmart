@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  canManageMembers,
+} from "@/lib/auth/permissions";
 
 export type MemberFormState = {
   error: string | null;
@@ -23,10 +26,6 @@ type MemberPayload = {
 type SupabaseClient = Awaited<
   ReturnType<typeof createClient>
 >;
-
-function canManageMembers(role: string) {
-  return role === "owner" || role === "admin";
-}
 
 function readText(
   formData: FormData,

@@ -3,6 +3,9 @@ import Link from "next/link";
 import { MemberStatusButton } from "@/app/panel/personas/member-status-button";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  canManageMembers,
+} from "@/lib/auth/permissions";
 
 type SearchParams = Promise<{
   estado?: string;
@@ -42,6 +45,10 @@ export default async function MembersPage({
   searchParams,
 }: PageProps) {
   const context = await getAdminContext();
+  const canManage =
+  canManageMembers(
+    context.role,
+  );
   const params = await searchParams;
 
   const status =
@@ -145,12 +152,14 @@ export default async function MembersPage({
           </p>
         </div>
 
-        <Link
-          href="/panel/personas/nueva"
-          className="inline-flex justify-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
-        >
-          Nueva persona
-        </Link>
+        {canManage ? (
+  <Link
+    href="/panel/personas/nueva"
+    className="inline-flex justify-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
+  >
+    Nueva persona
+  </Link>
+) : null}
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -393,19 +402,27 @@ export default async function MembersPage({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/panel/personas/${member.id}/editar`}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Editar
-                    </Link>
+  {canManage ? (
+    <>
+      <Link
+        href={`/panel/personas/${member.id}/editar`}
+        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+      >
+        Editar
+      </Link>
 
-                    <MemberStatusButton
-                      memberId={member.id}
-                      memberName={memberName}
-                      active={member.active}
-                    />
-                  </div>
+      <MemberStatusButton
+        memberId={member.id}
+        memberName={memberName}
+        active={member.active}
+      />
+    </>
+  ) : (
+    <span className="text-sm text-slate-400">
+      Solo lectura
+    </span>
+  )}
+</div>
                 </article>
               );
             })}

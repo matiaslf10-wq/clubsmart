@@ -5,6 +5,9 @@ import { createMember } from "@/app/panel/personas/actions";
 import { MemberForm } from "@/app/panel/personas/member-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  canManageMembers,
+} from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +15,14 @@ export default async function NewMemberPage() {
   const context = await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel/personas");
-  }
+  !canManageMembers(
+    context.role,
+  )
+) {
+  redirect(
+    "/panel/personas",
+  );
+}
 
   const supabase = await createClient();
 

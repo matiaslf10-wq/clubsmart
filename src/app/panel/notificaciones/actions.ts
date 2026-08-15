@@ -25,6 +25,10 @@ type AudienceType =
   | "activity"
   | "reservation";
 
+  type DeliveryChannel =
+  | "email"
+  | "whatsapp";
+
 type RecipientRow = {
   member_id: string | null;
   reservation_id: string | null;
@@ -46,6 +50,30 @@ function readText(
     "string"
     ? value.trim()
     : "";
+}
+
+function readDeliveryChannels(
+  formData: FormData,
+): DeliveryChannel[] {
+  const values =
+    formData.getAll(
+      "channels",
+    );
+
+  const channels =
+    values.filter(
+      (
+        value,
+      ): value is DeliveryChannel =>
+        value === "email" ||
+        value === "whatsapp",
+    );
+
+  return [
+    ...new Set(
+      channels,
+    ),
+  ];
 }
 
 function isUuid(
@@ -144,6 +172,11 @@ export async function createNotification(
       "body",
     );
 
+    const deliveryChannels =
+  readDeliveryChannels(
+    formData,
+  );
+
   if (
     !isAudienceType(
       audienceType,
@@ -190,6 +223,16 @@ export async function createNotification(
       "El mensaje no puede superar los 3000 caracteres.",
     );
   }
+
+if (
+  deliveryChannels.length ===
+  0
+) {
+  redirectToNewNotification(
+    "error",
+    "Seleccioná al menos un canal de comunicación.",
+  );
+}
 
   const supabase =
     createAdminClient();
@@ -524,6 +567,47 @@ recipient_phone:
     );
   }
 
+  const emailRecipientCount =
+  recipients.filter(
+    (recipient) =>
+      Boolean(
+        recipient.recipient_email,
+      ),
+  ).length;
+
+const whatsappRecipientCount =
+  recipients.filter(
+    (recipient) =>
+      Boolean(
+        recipient.recipient_phone,
+      ),
+  ).length;
+
+const plannedDeliveryCount =
+  (
+    deliveryChannels.includes(
+      "email",
+    )
+      ? emailRecipientCount
+      : 0
+  ) +
+  (
+    deliveryChannels.includes(
+      "whatsapp",
+    )
+      ? whatsappRecipientCount
+      : 0
+  );
+
+if (
+  plannedDeliveryCount === 0
+) {
+  redirectToNewNotification(
+    "error",
+    "Ninguno de los destinatarios tiene datos de contacto para los canales seleccionados.",
+  );
+}
+
   const now =
     new Date().toISOString();
 
@@ -569,13 +653,18 @@ recipient_phone:
         now,
 
       metadata: {
-        recipient_count:
-          recipients.length,
+  recipient_count:
+    recipients.length,
 
-        delivery_channels: [
-          "in_app",
-        ],
-      },
+  delivery_channels:
+    deliveryChannels,
+
+  email_recipient_count:
+    emailRecipientCount,
+
+  whatsapp_recipient_count:
+    whatsappRecipientCount,
+},
 
       created_at:
         now,
@@ -630,15 +719,22 @@ recipient_phone:
     );
 
   const {
-    error:
-      recipientsError,
-  } = await supabase
-    .from(
-      "club_notification_recipients",
-    )
-    .insert(
-      recipientRows,
-    );
+  data:
+    savedRecipients,
+  error:
+    recipientsError,
+} = await supabase
+  .from(
+    "club_notification_recipients",
+  )
+  .insert(
+    recipientRows,
+  )
+  .select(`
+    id,
+    recipient_email,
+    recipient_phone
+  `);
 
   if (
     recipientsError
@@ -664,6 +760,126 @@ recipient_phone:
     );
   }
 
+  const deliveryRows = [];
+
+for (
+  const recipient of
+    savedRecipients ?? []
+) {
+  if (
+    deliveryChannels.includes(
+      "email",
+    ) &&
+    recipient.recipient_email
+  ) {
+    deliveryRows.push({
+      organization_id:
+        context.organizationId,
+
+      club_id:
+        context.clubId,
+
+      notification_id:
+        notification.id,
+
+      recipient_id:
+        recipient.id,
+
+      channel:
+        "email",
+
+      status:
+        "pending",
+
+      destination:
+        recipient.recipient_email,
+
+      metadata: {},
+    });
+  }
+
+  if (
+    deliveryChannels.includes(
+      "whatsapp",
+    ) &&
+    recipient.recipient_phone
+  ) {
+    deliveryRows.push({
+      organization_id:
+        context.organizationId,
+
+      club_id:
+        context.clubId,
+
+      notification_id:
+        notification.id,
+
+      recipient_id:
+        recipient.id,
+
+      channel:
+        "whatsapp",
+
+      status:
+        "pending",
+
+      destination:
+        recipient.recipient_phone,
+
+      metadata: {},
+    });
+  }
+}
+
+if (
+  deliveryRows.length === 0
+) {
+  await supabase
+    .from(
+      "club_notifications",
+    )
+    .delete()
+    .eq(
+      "id",
+      notification.id,
+    );
+
+  redirectToNewNotification(
+    "error",
+    "No fue posible generar ninguna entrega para los canales seleccionados.",
+  );
+}
+
+const {
+  error:
+    deliveriesError,
+} = await supabase
+  .from(
+    "notification_deliveries",
+  )
+  .insert(
+    deliveryRows,
+  );
+
+if (
+  deliveriesError
+) {
+  await supabase
+    .from(
+      "club_notifications",
+    )
+    .delete()
+    .eq(
+      "id",
+      notification.id,
+    );
+
+  redirectToNewNotification(
+    "error",
+    `No fue posible preparar las entregas: ${deliveriesError.message}`,
+  );
+}
+
   revalidatePath(
     "/panel/notificaciones",
   );
@@ -676,10 +892,14 @@ recipient_phone:
   redirect(
     `/panel/notificaciones?success=${encodeURIComponent(
       `Notificación publicada para ${recipients.length} ${
-        recipients.length === 1
-          ? "persona"
-          : "personas"
-      }.`,
+  recipients.length === 1
+    ? "persona"
+    : "personas"
+}. ${deliveryRows.length} ${
+  deliveryRows.length === 1
+    ? "entrega preparada"
+    : "entregas preparadas"
+}.`
     )}`,
   );
 }

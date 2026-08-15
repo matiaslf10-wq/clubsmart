@@ -8,6 +8,9 @@ import { updateMember } from "@/app/panel/personas/actions";
 import { MemberForm } from "@/app/panel/personas/member-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  canManageMembers,
+} from "@/lib/auth/permissions";
 
 type PageProps = {
   params: Promise<{
@@ -24,12 +27,14 @@ export default async function EditMemberPage({
   const context = await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel/personas");
-  }
-
+  !canManageMembers(
+    context.role,
+  )
+) {
+  redirect(
+    "/panel/personas",
+  );
+}
   const supabase = await createClient();
 
   const {
