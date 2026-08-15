@@ -135,13 +135,18 @@ async function syncActivityFeeRate({
   const today =
     getTodayBuenosAires();
 
+  const now =
+    new Date().toISOString();
+
   /*
    * Buscamos la tarifa actualmente
-   * vigente.
+   * vigente de esta actividad.
    */
   const {
-    data: currentRate,
-    error: currentRateError,
+    data:
+      currentRate,
+    error:
+      currentRateError,
   } = await supabase
     .from(
       "activity_fee_rates",
@@ -181,12 +186,19 @@ async function syncActivityFeeRate({
   if (
     currentRateError
   ) {
-    return `No fue posible consultar la tarifa vigente: ${currentRateError.message}`;
+    return (
+      "No fue posible consultar la tarifa vigente: " +
+      currentRateError.message
+    );
   }
 
   /*
-   * Si borraron el arancel,
-   * cerramos la tarifa vigente.
+   * ========================================
+   * SIN PRECIO
+   * ========================================
+   *
+   * Si el administrador dejó vacío
+   * el precio, cerramos la tarifa vigente.
    */
   if (
     price === null
@@ -198,16 +210,16 @@ async function syncActivityFeeRate({
     }
 
     /*
-     * Si la tarifa nació hoy,
-     * directamente la eliminamos.
-     * No tiene sentido dejar una
-     * vigencia histórica de cero días.
+     * Si la tarifa fue creada hoy,
+     * simplemente la eliminamos.
      */
     if (
       currentRate.valid_from ===
       today
     ) {
       const {
+        data:
+          deletedRate,
         error:
           deleteError,
       } = await supabase
@@ -226,18 +238,49 @@ async function syncActivityFeeRate({
         .eq(
           "club_id",
           clubId,
-        );
+        )
+        .eq(
+          "activity_id",
+          activityId,
+        )
+        .select(
+          "id",
+        )
+        .maybeSingle();
 
       if (
         deleteError
       ) {
-        return `No fue posible eliminar la tarifa vigente: ${deleteError.message}`;
+        return (
+          "No fue posible eliminar la tarifa vigente: " +
+          deleteError.message
+        );
+      }
+
+      if (
+        !deletedRate
+      ) {
+        return (
+          "No fue posible eliminar la tarifa vigente: " +
+          "la operación no modificó ninguna fila."
+        );
       }
 
       return null;
     }
 
+    /*
+     * Si la tarifa viene de días anteriores,
+     * cerramos su vigencia ayer.
+     */
+    const previousDate =
+      getPreviousDate(
+        today,
+      );
+
     const {
+      data:
+        closedRate,
       error:
         closeError,
     } = await supabase
@@ -246,9 +289,10 @@ async function syncActivityFeeRate({
       )
       .update({
         valid_to:
-          getPreviousDate(
-            today,
-          ),
+          previousDate,
+
+        updated_at:
+          now,
       })
       .eq(
         "id",
@@ -261,21 +305,44 @@ async function syncActivityFeeRate({
       .eq(
         "club_id",
         clubId,
-      );
+      )
+      .eq(
+        "activity_id",
+        activityId,
+      )
+      .select(`
+        id,
+        valid_to
+      `)
+      .maybeSingle();
 
     if (
       closeError
     ) {
-      return `No fue posible cerrar la tarifa vigente: ${closeError.message}`;
+      return (
+        "No fue posible cerrar la tarifa vigente: " +
+        closeError.message
+      );
+    }
+
+    if (
+      !closedRate
+    ) {
+      return (
+        "No fue posible cerrar la tarifa vigente: " +
+        "la operación no modificó ninguna fila."
+      );
     }
 
     return null;
   }
 
   /*
-   * Si ya existe exactamente
-   * el mismo importe, no hacemos nada.
+   * ========================================
+   * MISMO PRECIO
+   * ========================================
    */
+
   if (
     currentRate &&
     Number(
@@ -286,12 +353,15 @@ async function syncActivityFeeRate({
   }
 
   /*
-   * Si la tarifa vigente fue creada
-   * hoy, simplemente modificamos
-   * su importe.
+   * ========================================
+   * TARIFA CREADA HOY
+   * ========================================
    *
-   * Esto evita crear dos tarifas
-   * con la misma fecha de inicio.
+   * Si la tarifa vigente empezó hoy,
+   * modificamos esa misma fila.
+   *
+   * No creamos una segunda tarifa
+   * con la misma fecha.
    */
   if (
     currentRate &&
@@ -299,6 +369,8 @@ async function syncActivityFeeRate({
       today
   ) {
     const {
+      data:
+        updatedRate,
       error:
         updateError,
     } = await supabase
@@ -308,6 +380,9 @@ async function syncActivityFeeRate({
       .update({
         amount:
           price,
+
+        updated_at:
+          now,
       })
       .eq(
         "id",
@@ -320,25 +395,78 @@ async function syncActivityFeeRate({
       .eq(
         "club_id",
         clubId,
-      );
+      )
+      .eq(
+        "activity_id",
+        activityId,
+      )
+      .select(`
+        id,
+        amount,
+        valid_from,
+        valid_to
+      `)
+      .maybeSingle();
 
     if (
       updateError
     ) {
-      return `No fue posible actualizar la tarifa: ${updateError.message}`;
+      return (
+        "No fue posible actualizar la tarifa: " +
+        updateError.message
+      );
+    }
+
+    /*
+     * Muy importante:
+     *
+     * Un UPDATE que no encontró filas
+     * puede no producir un error.
+     * Por eso comprobamos updatedRate.
+     */
+    if (
+      !updatedRate
+    ) {
+      return (
+        "No fue posible actualizar la tarifa: " +
+        "la operación no modificó ninguna fila."
+      );
+    }
+
+    /*
+     * Verificación adicional.
+     */
+    if (
+      Number(
+        updatedRate.amount,
+      ) !== price
+    ) {
+      return (
+        "La tarifa fue actualizada, pero el importe " +
+        "guardado no coincide con el solicitado."
+      );
     }
 
     return null;
   }
 
   /*
-   * Si había una tarifa anterior,
-   * cerramos su vigencia ayer.
+   * ========================================
+   * CERRAR TARIFA ANTERIOR
+   * ========================================
    */
+
   if (
     currentRate
   ) {
+    const previousDate =
+      getPreviousDate(
+        today,
+      );
+
     const {
+      data:
+        closedRate,
       error:
         closeError,
     } = await supabase
@@ -347,9 +475,10 @@ async function syncActivityFeeRate({
       )
       .update({
         valid_to:
-          getPreviousDate(
-            today,
-          ),
+          previousDate,
+
+        updated_at:
+          now,
       })
       .eq(
         "id",
@@ -362,19 +491,45 @@ async function syncActivityFeeRate({
       .eq(
         "club_id",
         clubId,
-      );
+      )
+      .eq(
+        "activity_id",
+        activityId,
+      )
+      .select(`
+        id,
+        valid_to
+      `)
+      .maybeSingle();
 
     if (
       closeError
     ) {
-      return `No fue posible cerrar la tarifa anterior: ${closeError.message}`;
+      return (
+        "No fue posible cerrar la tarifa anterior: " +
+        closeError.message
+      );
+    }
+
+    if (
+      !closedRate
+    ) {
+      return (
+        "No fue posible cerrar la tarifa anterior: " +
+        "la operación no modificó ninguna fila."
+      );
     }
   }
 
   /*
-   * Creamos la nueva tarifa vigente.
+   * ========================================
+   * CREAR NUEVA TARIFA
+   * ========================================
    */
+
   const {
+    data:
+      newRate,
     error:
       insertError,
   } = await supabase
@@ -399,12 +554,77 @@ async function syncActivityFeeRate({
 
       valid_to:
         null,
-    });
+
+      updated_at:
+        now,
+    })
+    .select(`
+      id,
+      amount,
+      valid_from,
+      valid_to
+    `)
+    .single();
 
   if (
-    insertError
+    insertError ||
+    !newRate
   ) {
-    return `No fue posible crear la nueva tarifa: ${insertError.message}`;
+    /*
+     * Si habíamos cerrado una tarifa
+     * anterior y falló la creación
+     * de la nueva, intentamos restaurarla.
+     */
+    if (
+      currentRate
+    ) {
+      await supabase
+        .from(
+          "activity_fee_rates",
+        )
+        .update({
+          valid_to:
+            null,
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          currentRate.id,
+        )
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq(
+          "club_id",
+          clubId,
+        )
+        .eq(
+          "activity_id",
+          activityId,
+        );
+    }
+
+    return (
+      "No fue posible crear la nueva tarifa: " +
+      (
+        insertError?.message ??
+        "Error desconocido."
+      )
+    );
+  }
+
+  if (
+    Number(
+      newRate.amount,
+    ) !== price
+  ) {
+    return (
+      "La nueva tarifa fue creada, pero el importe " +
+      "guardado no coincide con el solicitado."
+    );
   }
 
   return null;
