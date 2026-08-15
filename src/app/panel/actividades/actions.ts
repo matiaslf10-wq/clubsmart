@@ -51,8 +51,6 @@ type ActivityPayload = {
   level: ActivityLevel | null;
   ageFrom: number | null;
   ageTo: number | null;
-  price: number | null;
-  priceDescription: string;
   contactWhatsapp: string;
   schedules: ReturnType<
     typeof readSchedules
@@ -136,12 +134,6 @@ function readActivityPayload(
           "age_to",
         );
 
-  const price =
-    readOptionalNumber(
-      formData,
-      "price",
-    );
-
   const schedules =
     readSchedules(
       formData,
@@ -196,17 +188,6 @@ function readActivityPayload(
       data: null,
       error:
         "La edad máxima no puede ser menor que la mínima.",
-    };
-  }
-
-  if (
-    price !== null &&
-    price < 0
-  ) {
-    return {
-      data: null,
-      error:
-        "El precio no puede ser negativo.",
     };
   }
 
@@ -268,14 +249,6 @@ function readActivityPayload(
       ageFrom,
 
       ageTo,
-
-      price,
-
-      priceDescription:
-        readText(
-          formData,
-          "price_description",
-        ),
 
       contactWhatsapp,
 
@@ -343,10 +316,6 @@ export async function createActivity(
     };
   }
 
-  /*
-   * Buscamos slugs existentes
-   * exclusivamente dentro del club.
-   */
   const {
     data:
       existingActivities,
@@ -412,9 +381,6 @@ export async function createActivity(
       1;
   }
 
-  /*
-   * Creamos la actividad.
-   */
   const {
     data:
       activity,
@@ -463,18 +429,6 @@ export async function createActivity(
       level:
         payload.level,
 
-      /*
-       * Conservamos también el precio
-       * actual en activities.
-       *
-       * El historial real queda en
-       * activity_fee_rates.
-       */
-
-      price_description:
-        payload.priceDescription ||
-        null,
-
       contact_whatsapp:
         payload.contactWhatsapp ||
         null,
@@ -507,9 +461,6 @@ export async function createActivity(
     };
   }
 
-  /*
-   * Guardamos los horarios.
-   */
   const schedulesToInsert =
     payload.schedules.map(
       (
@@ -556,10 +507,6 @@ export async function createActivity(
   if (
     scheduleError
   ) {
-    /*
-     * Si fallan los horarios,
-     * revertimos la actividad.
-     */
     await supabase
       .from(
         "activities",
@@ -584,22 +531,6 @@ export async function createActivity(
     };
   }
 
-  /*
-   * IMPORTANTE:
-   *
-   * Recién AHORA existen:
-   *
-   * - payload
-   * - supabase
-   * - activity.id
-   *
-   * Por eso la sincronización del
-   * arancel tiene que ir acá.
-   */
-
-  /*
-   * Auditoría.
-   */
   await writeAuditLog(
     context,
     {
@@ -702,10 +633,6 @@ export async function updateActivity(
   const supabase =
     await createClient();
 
-  /*
-   * Leemos algunos valores anteriores
-   * para conservarlos en Auditoría.
-   */
   const {
     data:
       existingActivity,
@@ -723,8 +650,7 @@ export async function updateActivity(
       category,
       level,
       age_from,
-      age_to,
-      price
+      age_to
     `)
     .eq(
       "id",
@@ -796,10 +722,6 @@ export async function updateActivity(
       level:
         payload.level,
 
-      price_description:
-        payload.priceDescription ||
-        null,
-
       contact_whatsapp:
         payload.contactWhatsapp ||
         null,
@@ -835,9 +757,6 @@ export async function updateActivity(
     };
   }
 
-  /*
-   * Reemplazamos los horarios actuales.
-   */
   const {
     error:
       deleteSchedulesError,
@@ -917,13 +836,6 @@ export async function updateActivity(
     };
   }
 
-  /*
-   * Auditoría.
-   *
-   * Guardamos valores anteriores y
-   * posteriores de los campos más
-   * relevantes.
-   */
   await writeAuditLog(
     context,
     {
@@ -967,9 +879,6 @@ export async function updateActivity(
 
           age_to:
             existingActivity.age_to,
-
-          price:
-            existingActivity.price,
         },
 
         current: {
@@ -1037,11 +946,6 @@ export async function deleteActivity(
   const supabase =
     await createClient();
 
-  /*
-   * Conservamos nombre y slug para
-   * poder registrar correctamente
-   * la eliminación en Auditoría.
-   */
   const {
     data:
       activity,
@@ -1089,11 +993,6 @@ export async function deleteActivity(
     };
   }
 
-  /*
-   * Antes de permitir la eliminación física,
-   * verificamos que no exista información
-   * histórica relacionada.
-   */
   const adminSupabase =
     createAdminClient();
 
@@ -1316,10 +1215,6 @@ export async function deleteActivity(
     };
   }
 
-  /*
-   * Si no existe historial, podemos
-   * eliminar sus relaciones auxiliares.
-   */
   const {
     error:
       schedulesError,
@@ -1432,12 +1327,6 @@ export async function deleteActivity(
     };
   }
 
-  /*
-   * Auditoría.
-   *
-   * La escribimos después de la
-   * eliminación exitosa de la fila.
-   */
   await writeAuditLog(
     context,
     {
@@ -1474,11 +1363,6 @@ export async function deleteActivity(
     },
   );
 
-  /*
-   * La eliminación del archivo de Storage
-   * es secundaria: si falla, la actividad
-   * igualmente ya fue eliminada.
-   */
   if (
     activity.cover_image_storage_path
   ) {
