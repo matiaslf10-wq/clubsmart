@@ -1,13 +1,28 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import {
+  revalidatePath,
+} from "next/cache";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  redirect,
+} from "next/navigation";
+
+import {
+  writeAuditLog,
+} from "@/lib/audit/write-audit-log";
+
+import {
+  getAdminContext,
+} from "@/lib/auth/admin-context";
+
 import {
   canManageSpaces,
 } from "@/lib/auth/permissions";
+
+import {
+  createAdminClient,
+} from "@/lib/supabase/admin";
 
 type AvailabilityInput = {
   day_of_week: number;
@@ -18,31 +33,43 @@ type AvailabilityInput = {
   notes: string;
 };
 
-const allowedSpaceTypes = new Set([
-  "court",
-  "hall",
-  "barbecue",
-  "stadium",
-  "pool",
-  "room",
-  "other",
-]);
+const allowedSpaceTypes =
+  new Set([
+    "court",
+    "hall",
+    "barbecue",
+    "stadium",
+    "pool",
+    "room",
+    "other",
+  ]);
 
-const allowedConfirmationModes = new Set([
-  "manual",
-  "automatic",
-]);
+const allowedConfirmationModes =
+  new Set([
+    "manual",
+    "automatic",
+  ]);
 
-const allowedDepositTypes = new Set([
-  "none",
-  "fixed",
-  "percentage",
-]);
+const allowedDepositTypes =
+  new Set([
+    "none",
+    "fixed",
+    "percentage",
+  ]);
 
-function readText(formData: FormData, field: string) {
-  const value = formData.get(field);
+function readText(
+  formData: FormData,
+  field: string,
+) {
+  const value =
+    formData.get(
+      field,
+    );
 
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value ===
+    "string"
+    ? value.trim()
+    : "";
 }
 
 function readNumber(
@@ -50,59 +77,118 @@ function readNumber(
   field: string,
   fallback = 0,
 ) {
-  const rawValue = readText(formData, field);
+  const rawValue =
+    readText(
+      formData,
+      field,
+    );
 
-  if (!rawValue) {
+  if (
+    !rawValue
+  ) {
     return fallback;
   }
 
-  const value = Number(rawValue);
+  const value =
+    Number(
+      rawValue,
+    );
 
-  return Number.isFinite(value) ? value : fallback;
+  return Number.isFinite(
+    value,
+  )
+    ? value
+    : fallback;
 }
 
 function readNullableInteger(
   formData: FormData,
   field: string,
 ) {
-  const rawValue = readText(formData, field);
+  const rawValue =
+    readText(
+      formData,
+      field,
+    );
 
-  if (!rawValue) {
+  if (
+    !rawValue
+  ) {
     return null;
   }
 
-  const value = Number(rawValue);
+  const value =
+    Number(
+      rawValue,
+    );
 
-  return Number.isInteger(value) ? value : null;
+  return Number.isInteger(
+    value,
+  )
+    ? value
+    : null;
 }
 
-function isUuid(value: string) {
+function isUuid(
+  value: string,
+) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
 }
 
-function slugify(value: string) {
-  const slug = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+function slugify(
+  value: string,
+) {
+  const slug =
+    value
+      .normalize(
+        "NFD",
+      )
+      .replace(
+        /[\u0300-\u036f]/g,
+        "",
+      )
+      .toLowerCase()
+      .trim()
+      .replace(
+        /[^a-z0-9]+/g,
+        "-",
+      )
+      .replace(
+        /^-+|-+$/g,
+        "",
+      );
 
-  return slug || "espacio";
+  return (
+    slug ||
+    "espacio"
+  );
 }
 
-function timeToMinutes(value: string) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
+function timeToMinutes(
+  value: string,
+) {
+  const match =
+    /^(\d{2}):(\d{2})$/.exec(
+      value,
+    );
 
-  if (!match) {
+  if (
+    !match
+  ) {
     return null;
   }
 
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
+  const hours =
+    Number(
+      match[1],
+    );
+
+  const minutes =
+    Number(
+      match[2],
+    );
 
   if (
     hours < 0 ||
@@ -113,178 +199,246 @@ function timeToMinutes(value: string) {
     return null;
   }
 
-  return hours * 60 + minutes;
+  return (
+    hours * 60 +
+    minutes
+  );
 }
 
-function parseAvailability(formData: FormData) {
-  const rawValue = readText(
-    formData,
-    "availability_json",
-  );
+function parseAvailability(
+  formData: FormData,
+) {
+  const rawValue =
+    readText(
+      formData,
+      "availability_json",
+    );
 
-  if (!rawValue) {
+  if (
+    !rawValue
+  ) {
     return [] satisfies AvailabilityInput[];
   }
 
-  let parsedValue: unknown;
+  let parsedValue:
+    unknown;
 
   try {
-    parsedValue = JSON.parse(rawValue);
+    parsedValue =
+      JSON.parse(
+        rawValue,
+      );
   } catch {
     throw new Error(
       "Los horarios disponibles no tienen un formato válido.",
     );
   }
 
-  if (!Array.isArray(parsedValue)) {
+  if (
+    !Array.isArray(
+      parsedValue,
+    )
+  ) {
     throw new Error(
       "Los horarios disponibles no tienen un formato válido.",
     );
   }
 
-  if (parsedValue.length > 70) {
+  if (
+    parsedValue.length >
+    70
+  ) {
     throw new Error(
       "Se cargaron demasiados horarios para un mismo espacio.",
     );
   }
 
-  const result: AvailabilityInput[] =
-    parsedValue.map((item) => {
-      if (
-        typeof item !== "object" ||
-        item === null ||
-        Array.isArray(item)
-      ) {
-        throw new Error(
-          "Uno de los horarios no tiene un formato válido.",
-        );
-      }
+  const result:
+    AvailabilityInput[] =
+      parsedValue.map(
+        (
+          item,
+        ) => {
+          if (
+            typeof item !==
+              "object" ||
+            item ===
+              null ||
+            Array.isArray(
+              item,
+            )
+          ) {
+            throw new Error(
+              "Uno de los horarios no tiene un formato válido.",
+            );
+          }
 
-      const record =
-        item as Record<string, unknown>;
+          const record =
+            item as Record<
+              string,
+              unknown
+            >;
 
-      const dayOfWeek = Number(
-        record.day_of_week,
+          const dayOfWeek =
+            Number(
+              record.day_of_week,
+            );
+
+          const startTime =
+            typeof record.start_time ===
+            "string"
+              ? record.start_time.trim()
+              : "";
+
+          const endTime =
+            typeof record.end_time ===
+            "string"
+              ? record.end_time.trim()
+              : "";
+
+          const location =
+            typeof record.location ===
+            "string"
+              ? record.location.trim()
+              : "";
+
+          const notes =
+            typeof record.notes ===
+            "string"
+              ? record.notes.trim()
+              : "";
+
+          const startMinutes =
+            timeToMinutes(
+              startTime,
+            );
+
+          const endMinutes =
+            timeToMinutes(
+              endTime,
+            );
+
+          if (
+            !Number.isInteger(
+              dayOfWeek,
+            ) ||
+            dayOfWeek <
+              1 ||
+            dayOfWeek >
+              7
+          ) {
+            throw new Error(
+              "Uno de los días seleccionados no es válido.",
+            );
+          }
+
+          if (
+            startMinutes ===
+              null ||
+            endMinutes ===
+              null
+          ) {
+            throw new Error(
+              "Uno de los horarios no tiene una hora válida.",
+            );
+          }
+
+          if (
+            startMinutes ===
+            endMinutes
+          ) {
+            throw new Error(
+              "La hora de inicio y de finalización no pueden ser iguales.",
+            );
+          }
+
+          return {
+            day_of_week:
+              dayOfWeek,
+
+            start_time:
+              startTime,
+
+            end_time:
+              endTime,
+
+            ends_next_day:
+              endMinutes <
+              startMinutes,
+
+            location,
+
+            notes,
+          };
+        },
       );
 
-      const startTime =
-        typeof record.start_time === "string"
-          ? record.start_time.trim()
-          : "";
-
-      const endTime =
-        typeof record.end_time === "string"
-          ? record.end_time.trim()
-          : "";
-
-      const location =
-        typeof record.location === "string"
-          ? record.location.trim()
-          : "";
-
-      const notes =
-        typeof record.notes === "string"
-          ? record.notes.trim()
-          : "";
-
-      const startMinutes =
-        timeToMinutes(startTime);
-
-      const endMinutes =
-        timeToMinutes(endTime);
-
-      if (
-        !Number.isInteger(dayOfWeek) ||
-        dayOfWeek < 1 ||
-        dayOfWeek > 7
-      ) {
-        throw new Error(
-          "Uno de los días seleccionados no es válido.",
-        );
-      }
-
-      if (
-        startMinutes === null ||
-        endMinutes === null
-      ) {
-        throw new Error(
-          "Uno de los horarios no tiene una hora válida.",
-        );
-      }
-
-      if (startMinutes === endMinutes) {
-        throw new Error(
-          "La hora de inicio y de finalización no pueden ser iguales.",
-        );
-      }
-
-      return {
-        day_of_week: dayOfWeek,
-        start_time: startTime,
-        end_time: endTime,
-
-        ends_next_day:
-          endMinutes < startMinutes,
-
-        location,
-        notes,
-      };
-    });
-
   /*
-   * Convertimos los horarios en minutos de una
-   * semana completa. De esta forma podemos detectar
-   * superposiciones incluso cuando un turno cruza
-   * la medianoche.
+   * Convertimos los horarios en minutos
+   * de una semana completa para detectar
+   * superposiciones, incluso cuando
+   * atraviesan la medianoche.
    */
-  const minutesPerDay = 1440;
-  const minutesPerWeek = 7 * minutesPerDay;
+  const minutesPerDay =
+    1440;
 
-  const normalizedIntervals = result.map(
-    (availability, index) => {
-      const startMinutes =
-        timeToMinutes(
-          availability.start_time,
-        ) ?? 0;
+  const minutesPerWeek =
+    7 *
+    minutesPerDay;
 
-      const endMinutes =
-        timeToMinutes(
-          availability.end_time,
-        ) ?? 0;
-
-      const dayStart =
-        (availability.day_of_week - 1) *
-        minutesPerDay;
-
-      return {
+  const normalizedIntervals =
+    result.map(
+      (
+        availability,
         index,
+      ) => {
+        const startMinutes =
+          timeToMinutes(
+            availability.start_time,
+          ) ??
+          0;
 
-        start:
-          dayStart + startMinutes,
+        const endMinutes =
+          timeToMinutes(
+            availability.end_time,
+          ) ??
+          0;
 
-        end:
-          dayStart +
-          endMinutes +
-          (availability.ends_next_day
-            ? minutesPerDay
-            : 0),
-      };
-    },
-  );
+        const dayStart =
+          (
+            availability.day_of_week -
+            1
+          ) *
+          minutesPerDay;
 
-  /*
-   * Duplicamos los horarios una semana después
-   * para detectar casos como:
-   *
-   * Domingo 23:00–02:00
-   * Lunes   01:00–03:00
-   */
+        return {
+          index,
+
+          start:
+            dayStart +
+            startMinutes,
+
+          end:
+            dayStart +
+            endMinutes +
+            (
+              availability.ends_next_day
+                ? minutesPerDay
+                : 0
+            ),
+        };
+      },
+    );
+
   const expandedIntervals = [
     ...normalizedIntervals,
 
     ...normalizedIntervals.map(
-      (interval) => ({
+      (
+        interval,
+      ) => ({
         ...interval,
+
         start:
           interval.start +
           minutesPerWeek,
@@ -297,10 +451,12 @@ function parseAvailability(formData: FormData) {
   ];
 
   for (
-    const current of normalizedIntervals
+    const current of
+      normalizedIntervals
   ) {
     for (
-      const candidate of expandedIntervals
+      const candidate of
+        expandedIntervals
     ) {
       const sameOriginalInterval =
         current.index ===
@@ -308,7 +464,9 @@ function parseAvailability(formData: FormData) {
         current.start ===
           candidate.start;
 
-      if (sameOriginalInterval) {
+      if (
+        sameOriginalInterval
+      ) {
         continue;
       }
 
@@ -318,7 +476,9 @@ function parseAvailability(formData: FormData) {
         candidate.start <
           current.end;
 
-      if (overlaps) {
+      if (
+        overlaps
+      ) {
         throw new Error(
           "Hay horarios superpuestos. Revisá también los turnos que continúan después de la medianoche.",
         );
@@ -327,7 +487,10 @@ function parseAvailability(formData: FormData) {
   }
 
   return result.sort(
-    (first, second) => {
+    (
+      first,
+      second,
+    ) => {
       if (
         first.day_of_week !==
         second.day_of_week
@@ -349,27 +512,55 @@ async function getUniqueSlug(
   clubId: string,
   name: string,
 ) {
-  const supabase = createAdminClient();
-  const baseSlug = slugify(name);
+  const supabase =
+    createAdminClient();
 
-  for (let index = 0; index < 100; index += 1) {
+  const baseSlug =
+    slugify(
+      name,
+    );
+
+  for (
+    let index = 0;
+    index < 100;
+    index += 1
+  ) {
     const candidate =
-      index === 0 ? baseSlug : `${baseSlug}-${index + 1}`;
+      index === 0
+        ? baseSlug
+        : `${baseSlug}-${index + 1}`;
 
-    const { data, error } = await supabase
-      .from("club_spaces")
-      .select("id")
-      .eq("club_id", clubId)
-      .eq("slug", candidate)
+    const {
+      data,
+      error,
+    } = await supabase
+      .from(
+        "club_spaces",
+      )
+      .select(
+        "id",
+      )
+      .eq(
+        "club_id",
+        clubId,
+      )
+      .eq(
+        "slug",
+        candidate,
+      )
       .maybeSingle();
 
-    if (error) {
+    if (
+      error
+    ) {
       throw new Error(
         `No fue posible verificar el identificador del espacio: ${error.message}`,
       );
     }
 
-    if (!data) {
+    if (
+      !data
+    ) {
       return candidate;
     }
   }
@@ -380,105 +571,162 @@ async function getUniqueSlug(
 }
 
 function redirectToSpaces(
-  type: "success" | "error",
+  type:
+    | "success"
+    | "error",
   message: string,
 ): never {
-  const parameters = new URLSearchParams({
-    [type]: message,
-  });
+  const parameters =
+    new URLSearchParams({
+      [type]:
+        message,
+    });
 
-  redirect(`/panel/espacios?${parameters.toString()}`);
+  redirect(
+    `/panel/espacios?${parameters.toString()}`,
+  );
 }
 
-function validateSpaceData(formData: FormData) {
-  const name = readText(formData, "name");
+function validateSpaceData(
+  formData: FormData,
+) {
+  const name =
+    readText(
+      formData,
+      "name",
+    );
 
-  const spaceType = readText(
-    formData,
-    "space_type",
-  );
+  const spaceType =
+    readText(
+      formData,
+      "space_type",
+    );
 
-  const shortDescription = readText(
-    formData,
-    "short_description",
-  );
+  const shortDescription =
+    readText(
+      formData,
+      "short_description",
+    );
 
-  const description = readText(
-    formData,
-    "description",
-  );
+  const description =
+    readText(
+      formData,
+      "description",
+    );
 
-  const location = readText(formData, "location");
+  const location =
+    readText(
+      formData,
+      "location",
+    );
 
-  const capacity = readNullableInteger(
-    formData,
-    "capacity",
-  );
+  const capacity =
+    readNullableInteger(
+      formData,
+      "capacity",
+    );
 
-  const minimumReservationMinutes = readNumber(
-    formData,
-    "minimum_reservation_minutes",
-    60,
-  );
+  const minimumReservationMinutes =
+    readNumber(
+      formData,
+      "minimum_reservation_minutes",
+      60,
+    );
 
-  const slotIntervalMinutes = readNumber(
-    formData,
-    "slot_interval_minutes",
-    30,
-  );
+  const slotIntervalMinutes =
+    readNumber(
+      formData,
+      "slot_interval_minutes",
+      30,
+    );
 
-  const price = readNumber(formData, "price", 0);
+  const price =
+    readNumber(
+      formData,
+      "price",
+      0,
+    );
 
-  const priceDescription = readText(
-    formData,
-    "price_description",
-  );
+  const priceDescription =
+    readText(
+      formData,
+      "price_description",
+    );
 
-  const confirmationMode = readText(
-    formData,
-    "confirmation_mode",
-  );
+  const confirmationMode =
+    readText(
+      formData,
+      "confirmation_mode",
+    );
 
   const requiresDeposit =
-    formData.get("requires_deposit") === "on";
+    formData.get(
+      "requires_deposit",
+    ) ===
+    "on";
 
-  const requestedDepositType = readText(
-    formData,
-    "deposit_type",
-  );
+  const requestedDepositType =
+    readText(
+      formData,
+      "deposit_type",
+    );
 
-  const depositType = requiresDeposit
-    ? requestedDepositType
-    : "none";
+  const depositType =
+    requiresDeposit
+      ? requestedDepositType
+      : "none";
 
-  const depositValue = requiresDeposit
-    ? readNumber(formData, "deposit_value", 0)
-    : 0;
+  const depositValue =
+    requiresDeposit
+      ? readNumber(
+          formData,
+          "deposit_value",
+          0,
+        )
+      : 0;
 
   const publiclyBookable =
-    formData.get("publicly_bookable") === "on";
+    formData.get(
+      "publicly_bookable",
+    ) ===
+    "on";
 
-  const displayOrder = readNumber(
-    formData,
-    "display_order",
-    0,
-  );
+  const displayOrder =
+    readNumber(
+      formData,
+      "display_order",
+      0,
+    );
 
-  if (name.length < 2) {
+  if (
+    name.length <
+    2
+  ) {
     throw new Error(
       "El nombre debe tener al menos dos caracteres.",
     );
   }
 
-  if (!allowedSpaceTypes.has(spaceType)) {
+  if (
+    !allowedSpaceTypes.has(
+      spaceType,
+    )
+  ) {
     throw new Error(
       "El tipo de espacio seleccionado no es válido.",
     );
   }
 
   if (
-    capacity !== null &&
-    (!Number.isInteger(capacity) || capacity <= 0)
+    capacity !==
+      null &&
+    (
+      !Number.isInteger(
+        capacity,
+      ) ||
+      capacity <=
+        0
+    )
   ) {
     throw new Error(
       "La capacidad debe ser un número entero mayor que cero.",
@@ -486,9 +734,13 @@ function validateSpaceData(formData: FormData) {
   }
 
   if (
-    !Number.isInteger(minimumReservationMinutes) ||
-    minimumReservationMinutes < 15 ||
-    minimumReservationMinutes > 1440
+    !Number.isInteger(
+      minimumReservationMinutes,
+    ) ||
+    minimumReservationMinutes <
+      15 ||
+    minimumReservationMinutes >
+      1440
   ) {
     throw new Error(
       "La duración mínima debe estar entre 15 y 1440 minutos.",
@@ -496,49 +748,74 @@ function validateSpaceData(formData: FormData) {
   }
 
   if (
-    !Number.isInteger(slotIntervalMinutes) ||
-    slotIntervalMinutes < 5 ||
-    slotIntervalMinutes > 720
+    !Number.isInteger(
+      slotIntervalMinutes,
+    ) ||
+    slotIntervalMinutes <
+      5 ||
+    slotIntervalMinutes >
+      720
   ) {
     throw new Error(
       "El intervalo entre turnos debe estar entre 5 y 720 minutos.",
     );
   }
 
-  if (price < 0) {
+  if (
+    price <
+    0
+  ) {
     throw new Error(
       "El precio no puede ser negativo.",
     );
   }
 
-  if (!allowedConfirmationModes.has(confirmationMode)) {
+  if (
+    !allowedConfirmationModes.has(
+      confirmationMode,
+    )
+  ) {
     throw new Error(
       "La modalidad de confirmación no es válida.",
     );
   }
 
-  if (!allowedDepositTypes.has(depositType)) {
+  if (
+    !allowedDepositTypes.has(
+      depositType,
+    )
+  ) {
     throw new Error(
       "El tipo de seña seleccionado no es válido.",
     );
   }
 
-  if (requiresDeposit) {
-    if (depositType === "none") {
+  if (
+    requiresDeposit
+  ) {
+    if (
+      depositType ===
+      "none"
+    ) {
       throw new Error(
         "Seleccioná cómo se calculará la seña.",
       );
     }
 
-    if (depositValue <= 0) {
+    if (
+      depositValue <=
+      0
+    ) {
       throw new Error(
         "El valor de la seña debe ser mayor que cero.",
       );
     }
 
     if (
-      depositType === "percentage" &&
-      depositValue > 100
+      depositType ===
+        "percentage" &&
+      depositValue >
+        100
     ) {
       throw new Error(
         "El porcentaje de seña no puede superar el 100 %.",
@@ -546,7 +823,10 @@ function validateSpaceData(formData: FormData) {
     }
   }
 
-  const availability = parseAvailability(formData);
+  const availability =
+    parseAvailability(
+      formData,
+    );
 
   return {
     name,
@@ -569,23 +849,42 @@ function validateSpaceData(formData: FormData) {
   };
 }
 
+/*
+ * ========================================
+ * CREAR ESPACIO
+ * ========================================
+ */
+
 export async function createSpace(
   formData: FormData,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context =
+    await getAdminContext();
 
-  if (!canManageSpaces(context.role)) {
+  if (
+    !canManageSpaces(
+      context.role,
+    )
+  ) {
     redirectToSpaces(
       "error",
       "Tu usuario no tiene permisos para administrar espacios.",
     );
   }
 
-  let values: ReturnType<typeof validateSpaceData>;
+  let values:
+    ReturnType<
+      typeof validateSpaceData
+    >;
 
   try {
-    values = validateSpaceData(formData);
-  } catch (error) {
+    values =
+      validateSpaceData(
+        formData,
+      );
+  } catch (
+    error
+  ) {
     redirectToSpaces(
       "error",
       error instanceof Error
@@ -594,16 +893,21 @@ export async function createSpace(
     );
   }
 
-  const supabase = createAdminClient();
+  const supabase =
+    createAdminClient();
 
-  let slug: string;
+  let slug:
+    string;
 
   try {
-    slug = await getUniqueSlug(
-      context.clubId,
-      values.name,
-    );
-  } catch (error) {
+    slug =
+      await getUniqueSlug(
+        context.clubId,
+        values.name,
+      );
+  } catch (
+    error
+  ) {
     redirectToSpaces(
       "error",
       error instanceof Error
@@ -612,104 +916,186 @@ export async function createSpace(
     );
   }
 
-  const now = new Date().toISOString();
+  const now =
+    new Date().toISOString();
 
-  const { data: space, error: spaceError } =
-    await supabase
-      .from("club_spaces")
-      .insert({
-        organization_id: context.organizationId,
-        club_id: context.clubId,
+  const {
+    data:
+      space,
+    error:
+      spaceError,
+  } = await supabase
+    .from(
+      "club_spaces",
+    )
+    .insert({
+      organization_id:
+        context.organizationId,
 
-        name: values.name,
-        slug,
+      club_id:
+        context.clubId,
 
-        space_type: values.spaceType,
+      name:
+        values.name,
 
-        short_description:
-          values.shortDescription || null,
+      slug,
 
-        description: values.description || null,
-        location: values.location || null,
+      space_type:
+        values.spaceType,
 
-        capacity: values.capacity,
+      short_description:
+        values.shortDescription ||
+        null,
 
-        minimum_reservation_minutes:
-          values.minimumReservationMinutes,
+      description:
+        values.description ||
+        null,
 
-        slot_interval_minutes:
-          values.slotIntervalMinutes,
+      location:
+        values.location ||
+        null,
 
-        price: values.price,
+      capacity:
+        values.capacity,
 
-        price_description:
-          values.priceDescription || null,
+      minimum_reservation_minutes:
+        values.minimumReservationMinutes,
 
-        confirmation_mode:
-          values.confirmationMode,
+      slot_interval_minutes:
+        values.slotIntervalMinutes,
 
-        requires_deposit:
-          values.requiresDeposit,
+      price:
+        values.price,
 
-        deposit_type: values.depositType,
-        deposit_value: values.depositValue,
+      price_description:
+        values.priceDescription ||
+        null,
 
-        publicly_bookable:
-          values.publiclyBookable,
+      confirmation_mode:
+        values.confirmationMode,
 
-        active: true,
+      requires_deposit:
+        values.requiresDeposit,
 
-        display_order: values.displayOrder,
+      deposit_type:
+        values.depositType,
 
-        created_by_user_id: context.userId,
+      deposit_value:
+        values.depositValue,
 
-        created_at: now,
-        updated_at: now,
-      })
-      .select("id")
-      .single();
+      publicly_bookable:
+        values.publiclyBookable,
 
-  if (spaceError || !space) {
+      active:
+        true,
+
+      display_order:
+        values.displayOrder,
+
+      created_by_user_id:
+        context.userId,
+
+      created_at:
+        now,
+
+      updated_at:
+        now,
+    })
+    .select(
+      "id",
+    )
+    .single();
+
+  if (
+    spaceError ||
+    !space
+  ) {
     redirectToSpaces(
       "error",
       `No fue posible crear el espacio: ${
-        spaceError?.message ?? "Error desconocido."
+        spaceError?.message ??
+        "Error desconocido."
       }`,
     );
   }
 
-  if (values.availability.length > 0) {
-    const { error: availabilityError } = await supabase
-      .from("space_availability")
+  if (
+    values.availability.length >
+    0
+  ) {
+    const {
+      error:
+        availabilityError,
+    } = await supabase
+      .from(
+        "space_availability",
+      )
       .insert(
-        values.availability.map((availability) => ({
-          organization_id: context.organizationId,
-          club_id: context.clubId,
-          space_id: space.id,
+        values.availability.map(
+          (
+            availability,
+          ) => ({
+            organization_id:
+              context.organizationId,
 
-          day_of_week: availability.day_of_week,
-          start_time: availability.start_time,
-          end_time: availability.end_time,
+            club_id:
+              context.clubId,
 
-          ends_next_day:
-  availability.ends_next_day,
+            space_id:
+              space.id,
 
-          location: availability.location || null,
-          notes: availability.notes || null,
+            day_of_week:
+              availability.day_of_week,
 
-          active: true,
+            start_time:
+              availability.start_time,
 
-          created_at: now,
-          updated_at: now,
-        })),
+            end_time:
+              availability.end_time,
+
+            ends_next_day:
+              availability.ends_next_day,
+
+            location:
+              availability.location ||
+              null,
+
+            notes:
+              availability.notes ||
+              null,
+
+            active:
+              true,
+
+            created_at:
+              now,
+
+            updated_at:
+              now,
+          }),
+        ),
       );
 
-    if (availabilityError) {
+    if (
+      availabilityError
+    ) {
       await supabase
-        .from("club_spaces")
+        .from(
+          "club_spaces",
+        )
         .delete()
-        .eq("id", space.id)
-        .eq("club_id", context.clubId);
+        .eq(
+          "id",
+          space.id,
+        )
+        .eq(
+          "organization_id",
+          context.organizationId,
+        )
+        .eq(
+          "club_id",
+          context.clubId,
+        );
 
       redirectToSpaces(
         "error",
@@ -718,7 +1104,78 @@ export async function createSpace(
     }
   }
 
-  revalidatePath("/panel/espacios");
+  /*
+   * Auditoría.
+   *
+   * Se registra únicamente cuando el
+   * espacio y sus horarios fueron
+   * creados correctamente.
+   */
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "space.created",
+
+      entityType:
+        "space",
+
+      entityId:
+        space.id,
+
+      entityLabel:
+        values.name,
+
+      summary:
+        `Creó el espacio "${values.name}".`,
+
+      metadata: {
+        slug,
+
+        space_type:
+          values.spaceType,
+
+        location:
+          values.location ||
+          null,
+
+        capacity:
+          values.capacity,
+
+        price:
+          values.price,
+
+        confirmation_mode:
+          values.confirmationMode,
+
+        requires_deposit:
+          values.requiresDeposit,
+
+        deposit_type:
+          values.depositType,
+
+        deposit_value:
+          values.depositValue,
+
+        publicly_bookable:
+          values.publiclyBookable,
+
+        display_order:
+          values.displayOrder,
+
+        availability_count:
+          values.availability.length,
+      },
+    },
+  );
+
+  revalidatePath(
+    "/panel/espacios",
+  );
+
+  revalidatePath(
+    `/clubes/${context.clubSlug}`,
+  );
 
   redirectToSpaces(
     "success",
@@ -726,31 +1183,54 @@ export async function createSpace(
   );
 }
 
+/*
+ * ========================================
+ * EDITAR ESPACIO
+ * ========================================
+ */
+
 export async function updateSpace(
   spaceId: string,
   formData: FormData,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context =
+    await getAdminContext();
 
-  if (!canManageSpaces(context.role)) {
+  if (
+    !canManageSpaces(
+      context.role,
+    )
+  ) {
     redirectToSpaces(
       "error",
       "Tu usuario no tiene permisos para administrar espacios.",
     );
   }
 
-  if (!isUuid(spaceId)) {
+  if (
+    !isUuid(
+      spaceId,
+    )
+  ) {
     redirectToSpaces(
       "error",
       "El espacio indicado no es válido.",
     );
   }
 
-  let values: ReturnType<typeof validateSpaceData>;
+  let values:
+    ReturnType<
+      typeof validateSpaceData
+    >;
 
   try {
-    values = validateSpaceData(formData);
-  } catch (error) {
+    values =
+      validateSpaceData(
+        formData,
+      );
+  } catch (
+    error
+  ) {
     redirectToSpaces(
       "error",
       error instanceof Error
@@ -759,55 +1239,136 @@ export async function updateSpace(
     );
   }
 
-  const supabase = createAdminClient();
+  const supabase =
+    createAdminClient();
 
-  const { data: existingSpace, error: existingSpaceError } =
-    await supabase
-      .from("club_spaces")
-      .select("id, slug")
-      .eq("id", spaceId)
-      .eq("organization_id", context.organizationId)
-      .eq("club_id", context.clubId)
-      .maybeSingle();
+  /*
+   * Guardamos los valores anteriores
+   * para Auditoría.
+   */
+  const {
+    data:
+      existingSpace,
+    error:
+      existingSpaceError,
+  } = await supabase
+    .from(
+      "club_spaces",
+    )
+    .select(`
+      id,
+      name,
+      slug,
+      space_type,
+      location,
+      capacity,
+      minimum_reservation_minutes,
+      slot_interval_minutes,
+      price,
+      price_description,
+      confirmation_mode,
+      requires_deposit,
+      deposit_type,
+      deposit_value,
+      publicly_bookable,
+      display_order,
+      active
+    `)
+    .eq(
+      "id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
 
-  if (existingSpaceError || !existingSpace) {
+  if (
+    existingSpaceError ||
+    !existingSpace
+  ) {
     redirectToSpaces(
       "error",
       "El espacio no existe o no pertenece a este club.",
     );
   }
 
-  const { data: previousAvailability } = await supabase
-    .from("space_availability")
+  const {
+    data:
+      previousAvailability,
+    error:
+      previousAvailabilityError,
+  } = await supabase
+    .from(
+      "space_availability",
+    )
     .select(`
-  day_of_week,
-  start_time,
-  end_time,
-  ends_next_day,
-  location,
-  notes,
-  active
-`)
-    .eq("space_id", spaceId)
-    .eq("organization_id", context.organizationId)
-    .eq("club_id", context.clubId);
+      day_of_week,
+      start_time,
+      end_time,
+      ends_next_day,
+      location,
+      notes,
+      active
+    `)
+    .eq(
+      "space_id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    );
 
-  const now = new Date().toISOString();
+  if (
+    previousAvailabilityError
+  ) {
+    redirectToSpaces(
+      "error",
+      `No fue posible consultar los horarios actuales: ${previousAvailabilityError.message}`,
+    );
+  }
 
-  const { error: updateError } = await supabase
-    .from("club_spaces")
+  const now =
+    new Date().toISOString();
+
+  const {
+    error:
+      updateError,
+  } = await supabase
+    .from(
+      "club_spaces",
+    )
     .update({
-      name: values.name,
+      name:
+        values.name,
 
-      space_type: values.spaceType,
+      space_type:
+        values.spaceType,
 
       short_description:
-        values.shortDescription || null,
+        values.shortDescription ||
+        null,
 
-      description: values.description || null,
-      location: values.location || null,
+      description:
+        values.description ||
+        null,
 
-      capacity: values.capacity,
+      location:
+        values.location ||
+        null,
+
+      capacity:
+        values.capacity,
 
       minimum_reservation_minutes:
         values.minimumReservationMinutes,
@@ -815,10 +1376,12 @@ export async function updateSpace(
       slot_interval_minutes:
         values.slotIntervalMinutes,
 
-      price: values.price,
+      price:
+        values.price,
 
       price_description:
-        values.priceDescription || null,
+        values.priceDescription ||
+        null,
 
       confirmation_mode:
         values.confirmationMode,
@@ -826,96 +1389,189 @@ export async function updateSpace(
       requires_deposit:
         values.requiresDeposit,
 
-      deposit_type: values.depositType,
-      deposit_value: values.depositValue,
+      deposit_type:
+        values.depositType,
+
+      deposit_value:
+        values.depositValue,
 
       publicly_bookable:
         values.publiclyBookable,
 
-      display_order: values.displayOrder,
+      display_order:
+        values.displayOrder,
 
-      updated_at: now,
+      updated_at:
+        now,
     })
-    .eq("id", spaceId)
-    .eq("organization_id", context.organizationId)
-    .eq("club_id", context.clubId);
+    .eq(
+      "id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    );
 
-  if (updateError) {
+  if (
+    updateError
+  ) {
     redirectToSpaces(
       "error",
       `No fue posible actualizar el espacio: ${updateError.message}`,
     );
   }
 
-  const { error: deleteAvailabilityError } =
-    await supabase
-      .from("space_availability")
-      .delete()
-      .eq("space_id", spaceId)
-      .eq("organization_id", context.organizationId)
-      .eq("club_id", context.clubId);
+  const {
+    error:
+      deleteAvailabilityError,
+  } = await supabase
+    .from(
+      "space_availability",
+    )
+    .delete()
+    .eq(
+      "space_id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    );
 
-  if (deleteAvailabilityError) {
+  if (
+    deleteAvailabilityError
+  ) {
     redirectToSpaces(
       "error",
       `El espacio se actualizó, pero no fue posible reemplazar sus horarios: ${deleteAvailabilityError.message}`,
     );
   }
 
-  if (values.availability.length > 0) {
-    const { error: insertAvailabilityError } =
-      await supabase
-        .from("space_availability")
-        .insert(
-          values.availability.map((availability) => ({
-            organization_id: context.organizationId,
-            club_id: context.clubId,
-            space_id: spaceId,
+  if (
+    values.availability.length >
+    0
+  ) {
+    const {
+      error:
+        insertAvailabilityError,
+    } = await supabase
+      .from(
+        "space_availability",
+      )
+      .insert(
+        values.availability.map(
+          (
+            availability,
+          ) => ({
+            organization_id:
+              context.organizationId,
 
-            day_of_week: availability.day_of_week,
-            start_time: availability.start_time,
-            end_time: availability.end_time,
+            club_id:
+              context.clubId,
+
+            space_id:
+              spaceId,
+
+            day_of_week:
+              availability.day_of_week,
+
+            start_time:
+              availability.start_time,
+
+            end_time:
+              availability.end_time,
 
             ends_next_day:
-  availability.ends_next_day,
+              availability.ends_next_day,
 
-            location: availability.location || null,
-            notes: availability.notes || null,
+            location:
+              availability.location ||
+              null,
 
-            active: true,
+            notes:
+              availability.notes ||
+              null,
 
-            created_at: now,
-            updated_at: now,
-          })),
-        );
+            active:
+              true,
 
-    if (insertAvailabilityError) {
+            created_at:
+              now,
+
+            updated_at:
+              now,
+          }),
+        ),
+      );
+
+    if (
+      insertAvailabilityError
+    ) {
+      /*
+       * Intentamos restaurar los horarios
+       * anteriores para no dejar el espacio
+       * sin disponibilidad por un error.
+       */
       if (
         previousAvailability &&
-        previousAvailability.length > 0
+        previousAvailability.length >
+          0
       ) {
         await supabase
-          .from("space_availability")
+          .from(
+            "space_availability",
+          )
           .insert(
-            previousAvailability.map((availability) => ({
-              organization_id: context.organizationId,
-              club_id: context.clubId,
-              space_id: spaceId,
+            previousAvailability.map(
+              (
+                availability,
+              ) => ({
+                organization_id:
+                  context.organizationId,
 
-              day_of_week: availability.day_of_week,
-              start_time: availability.start_time,
-              end_time: availability.end_time,
+                club_id:
+                  context.clubId,
 
-              ends_next_day:
-  availability.ends_next_day,
+                space_id:
+                  spaceId,
 
-              location: availability.location,
-              notes: availability.notes,
-              active: availability.active,
+                day_of_week:
+                  availability.day_of_week,
 
-              created_at: now,
-              updated_at: now,
-            })),
+                start_time:
+                  availability.start_time,
+
+                end_time:
+                  availability.end_time,
+
+                ends_next_day:
+                  availability.ends_next_day,
+
+                location:
+                  availability.location,
+
+                notes:
+                  availability.notes,
+
+                active:
+                  availability.active,
+
+                created_at:
+                  now,
+
+                updated_at:
+                  now,
+              }),
+            ),
           );
       }
 
@@ -926,8 +1582,145 @@ export async function updateSpace(
     }
   }
 
-  revalidatePath("/panel/espacios");
-  revalidatePath(`/panel/espacios/${spaceId}/editar`);
+  /*
+   * Auditoría.
+   */
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "space.updated",
+
+      entityType:
+        "space",
+
+      entityId:
+        spaceId,
+
+      entityLabel:
+        values.name,
+
+      summary:
+        existingSpace.name ===
+        values.name
+          ? `Actualizó el espacio "${values.name}".`
+          : `Actualizó el espacio "${existingSpace.name}", ahora llamado "${values.name}".`,
+
+      metadata: {
+        slug:
+          existingSpace.slug,
+
+        previous: {
+          name:
+            existingSpace.name,
+
+          space_type:
+            existingSpace.space_type,
+
+          location:
+            existingSpace.location,
+
+          capacity:
+            existingSpace.capacity,
+
+          minimum_reservation_minutes:
+            existingSpace.minimum_reservation_minutes,
+
+          slot_interval_minutes:
+            existingSpace.slot_interval_minutes,
+
+          price:
+            existingSpace.price,
+
+          price_description:
+            existingSpace.price_description,
+
+          confirmation_mode:
+            existingSpace.confirmation_mode,
+
+          requires_deposit:
+            existingSpace.requires_deposit,
+
+          deposit_type:
+            existingSpace.deposit_type,
+
+          deposit_value:
+            existingSpace.deposit_value,
+
+          publicly_bookable:
+            existingSpace.publicly_bookable,
+
+          display_order:
+            existingSpace.display_order,
+
+          availability_count:
+            previousAvailability?.length ??
+            0,
+        },
+
+        current: {
+          name:
+            values.name,
+
+          space_type:
+            values.spaceType,
+
+          location:
+            values.location ||
+            null,
+
+          capacity:
+            values.capacity,
+
+          minimum_reservation_minutes:
+            values.minimumReservationMinutes,
+
+          slot_interval_minutes:
+            values.slotIntervalMinutes,
+
+          price:
+            values.price,
+
+          price_description:
+            values.priceDescription ||
+            null,
+
+          confirmation_mode:
+            values.confirmationMode,
+
+          requires_deposit:
+            values.requiresDeposit,
+
+          deposit_type:
+            values.depositType,
+
+          deposit_value:
+            values.depositValue,
+
+          publicly_bookable:
+            values.publiclyBookable,
+
+          display_order:
+            values.displayOrder,
+
+          availability_count:
+            values.availability.length,
+        },
+      },
+    },
+  );
+
+  revalidatePath(
+    "/panel/espacios",
+  );
+
+  revalidatePath(
+    `/panel/espacios/${spaceId}/editar`,
+  );
+
+  revalidatePath(
+    `/clubes/${context.clubSlug}`,
+  );
 
   redirectToSpaces(
     "success",
@@ -935,48 +1728,186 @@ export async function updateSpace(
   );
 }
 
+/*
+ * ========================================
+ * ACTIVAR / DESACTIVAR ESPACIO
+ * ========================================
+ */
+
 export async function toggleSpaceActive(
   spaceId: string,
   nextActive: boolean,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context =
+    await getAdminContext();
 
-  if (!canManageSpaces(context.role)) {
+  if (
+    !canManageSpaces(
+      context.role,
+    )
+  ) {
     redirectToSpaces(
       "error",
       "Tu usuario no tiene permisos para administrar espacios.",
     );
   }
 
-  if (!isUuid(spaceId)) {
+  if (
+    !isUuid(
+      spaceId,
+    )
+  ) {
     redirectToSpaces(
       "error",
       "El espacio indicado no es válido.",
     );
   }
 
-  const supabase = createAdminClient();
+  const supabase =
+    createAdminClient();
 
-  const { data, error } = await supabase
-    .from("club_spaces")
-    .update({
-      active: nextActive,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", spaceId)
-    .eq("organization_id", context.organizationId)
-    .eq("club_id", context.clubId)
-    .select("id")
+  /*
+   * Leemos el estado anterior para
+   * poder registrar correctamente
+   * Auditoría.
+   */
+  const {
+    data:
+      existingSpace,
+    error:
+      existingSpaceError,
+  } = await supabase
+    .from(
+      "club_spaces",
+    )
+    .select(`
+      id,
+      name,
+      active
+    `)
+    .eq(
+      "id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
     .maybeSingle();
 
-  if (error || !data) {
+  if (
+    existingSpaceError ||
+    !existingSpace
+  ) {
+    redirectToSpaces(
+      "error",
+      "El espacio no existe o no pertenece a este club.",
+    );
+  }
+
+  /*
+   * Si ya está en ese estado,
+   * no escribimos ni generamos
+   * una auditoría innecesaria.
+   */
+  if (
+    existingSpace.active ===
+    nextActive
+  ) {
+    redirectToSpaces(
+      "success",
+      nextActive
+        ? "El espacio ya se encontraba activo."
+        : "El espacio ya se encontraba desactivado.",
+    );
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from(
+      "club_spaces",
+    )
+    .update({
+      active:
+        nextActive,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      "id",
+      spaceId,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .select(`
+      id,
+      name,
+      active
+    `)
+    .maybeSingle();
+
+  if (
+    error ||
+    !data
+  ) {
     redirectToSpaces(
       "error",
       "No fue posible cambiar el estado del espacio.",
     );
   }
 
-  revalidatePath("/panel/espacios");
+  await writeAuditLog(
+    context,
+    {
+      action:
+        nextActive
+          ? "space.reactivated"
+          : "space.deactivated",
+
+      entityType:
+        "space",
+
+      entityId:
+        spaceId,
+
+      entityLabel:
+        data.name,
+
+      summary:
+        nextActive
+          ? `Reactivó el espacio "${data.name}".`
+          : `Desactivó el espacio "${data.name}".`,
+
+      metadata: {
+        previous_active:
+          existingSpace.active,
+
+        current_active:
+          data.active,
+      },
+    },
+  );
+
+  revalidatePath(
+    "/panel/espacios",
+  );
+
+  revalidatePath(
+    `/clubes/${context.clubSlug}`,
+  );
 
   redirectToSpaces(
     "success",
