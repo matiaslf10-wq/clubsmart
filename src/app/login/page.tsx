@@ -15,11 +15,12 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   const supabase = await createClient();
 
-  const { data } = await supabase.auth.getClaims();
+  const { data } =
+    await supabase.auth.getClaims();
 
-if (data?.claims.sub) {
-  redirect("/panel");
-}
+  if (data?.claims.sub) {
+    redirect("/panel");
+  }
 
   return (
     <main className="grid min-h-screen bg-slate-50 lg:grid-cols-2">
@@ -47,6 +48,15 @@ if (data?.claims.sub) {
           </div>
 
           <LoginForm />
+
+          <div className="mt-6 text-center">
+            <Link
+              href="/auth/recuperar-clave"
+              className="text-sm font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
         </div>
       </section>
 
