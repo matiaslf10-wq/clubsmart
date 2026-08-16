@@ -49,14 +49,27 @@ export default async function LoginPage() {
 
           <LoginForm />
 
-          <div className="mt-6 text-center">
-            <Link
-              href="/auth/recuperar-clave"
-              className="text-sm font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
-            >
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </div>
+          <div className="mt-6 space-y-4 text-center">
+  <Link
+    href="/auth/recuperar-clave"
+    className="block text-sm font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+  >
+    ¿Olvidaste tu contraseña?
+  </Link>
+
+  <div className="border-t border-slate-200 pt-5">
+    <p className="text-sm text-slate-600">
+      ¿Todavía no tenés un club en ClubSmart?
+    </p>
+
+    <Link
+      href="/registro"
+      className="mt-2 inline-block text-sm font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+    >
+      Crear mi club
+    </Link>
+  </div>
+</div>
         </div>
       </section>
 
