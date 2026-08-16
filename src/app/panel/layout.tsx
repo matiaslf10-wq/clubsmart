@@ -2,38 +2,84 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logout } from "@/app/panel/actions";
-import { getAdminContext } from "@/lib/auth/admin-context";
-import { createClient } from "@/lib/supabase/server";
 import {
   PendingReservationsLink,
 } from "@/app/panel/reservas/pending-reservations-link";
+import { getAdminContext } from "@/lib/auth/admin-context";
 import {
   canManageUsers,
   canViewAudit,
   canViewNotifications,
 } from "@/lib/auth/permissions";
+import {
+  hasPlanFeature,
+  PLAN_LABELS,
+} from "@/lib/plans/features";
+import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 export default async function PanelLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = await createClient();
+  const supabase =
+    await createClient();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase.auth.getClaims();
 
-  if (error || !data?.claims?.sub) {
+  if (
+    error ||
+    !data?.claims?.sub
+  ) {
     redirect("/login");
   }
 
-  const context = await getAdminContext();
+  const context =
+    await getAdminContext();
 
   const canManagePayments =
-    context.role === "owner" ||
-    context.role === "admin";
+    hasPlanFeature(
+      context.planCode,
+      "payments",
+    ) &&
+    (
+      context.role === "owner" ||
+      context.role === "admin"
+    );
+
+  const showUsers =
+    hasPlanFeature(
+      context.planCode,
+      "users",
+    ) &&
+    canManageUsers(
+      context.role,
+    );
+
+  const showAudit =
+    hasPlanFeature(
+      context.planCode,
+      "audit",
+    ) &&
+    canViewAudit(
+      context.role,
+    );
+
+  const showNotifications =
+    hasPlanFeature(
+      context.planCode,
+      "notifications",
+    ) &&
+    canViewNotifications(
+      context.role,
+    );
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
@@ -44,9 +90,19 @@ export default async function PanelLayout({
               href="/panel"
               className="group"
             >
-              <p className="font-bold text-slate-900 transition group-hover:text-blue-700">
-                ClubSmart
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="font-bold text-slate-900 transition group-hover:text-blue-700">
+                  ClubSmart
+                </p>
+
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                  {
+                    PLAN_LABELS[
+                      context.planCode
+                    ]
+                  }
+                </span>
+              </div>
 
               <p className="mt-1 text-xs text-slate-500">
                 {context.clubName}
@@ -61,100 +117,129 @@ export default async function PanelLayout({
                 Resumen
               </Link>
 
-              <Link
-                href="/panel/actividades"
-                className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-              >
-                Actividades
-              </Link>
+              {hasPlanFeature(
+                context.planCode,
+                "activities",
+              ) ? (
+                <Link
+                  href="/panel/actividades"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Actividades
+                </Link>
+              ) : null}
 
-              <Link
-  href="/panel/espacios"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Espacios
-</Link>
+              {hasPlanFeature(
+                context.planCode,
+                "spaces",
+              ) ? (
+                <Link
+                  href="/panel/espacios"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Espacios
+                </Link>
+              ) : null}
 
-<PendingReservationsLink />
+              {hasPlanFeature(
+                context.planCode,
+                "reservations",
+              ) ? (
+                <PendingReservationsLink />
+              ) : null}
 
-              <Link
-                href="/panel/personas"
-                className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-              >
-                Personas
-              </Link>
+              {hasPlanFeature(
+                context.planCode,
+                "members",
+              ) ? (
+                <Link
+                  href="/panel/personas"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Personas
+                </Link>
+              ) : null}
 
-              {canManageUsers(
-  context.role,
-) ? (
-  <Link
-    href="/panel/usuarios"
-    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-  >
-    Usuarios
-  </Link>
-) : null}
+              {showUsers ? (
+                <Link
+                  href="/panel/usuarios"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Usuarios
+                </Link>
+              ) : null}
 
-{canViewAudit(
-  context.role,
-) ? (
-  <Link
-    href="/panel/auditoria"
-    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-  >
-    Auditoría
-  </Link>
-) : null}
+              {showAudit ? (
+                <Link
+                  href="/panel/auditoria"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Auditoría
+                </Link>
+              ) : null}
 
-{canViewNotifications(
-  context.role,
-) ? (
-  <Link
-    href="/panel/notificaciones"
-    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-  >
-    Notificaciones
-  </Link>
-) : null}
+              {showNotifications ? (
+                <Link
+                  href="/panel/notificaciones"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Notificaciones
+                </Link>
+              ) : null}
 
-              <Link
-  href="/panel/cuotas"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Cuotas
-</Link>
+              {hasPlanFeature(
+                context.planCode,
+                "fees",
+              ) ? (
+                <Link
+                  href="/panel/cuotas"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Cuotas
+                </Link>
+              ) : null}
 
-<Link
-  href="/panel/morosidad"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Morosidad
-</Link>
+              {hasPlanFeature(
+                context.planCode,
+                "delinquency",
+              ) ? (
+                <Link
+                  href="/panel/morosidad"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Morosidad
+                </Link>
+              ) : null}
 
-{canManagePayments ? (
-  <Link
-    href="/panel/pagos/adhesiones"
-    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-  >
-    Adhesiones
-  </Link>
-) : null}
+              {canManagePayments ? (
+                <Link
+                  href="/panel/pagos/adhesiones"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Adhesiones
+                </Link>
+              ) : null}
 
-{canManagePayments ? (
-  <Link
-    href="/panel/pagos/lotes"
-    className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-  >
-    Lotes
-  </Link>
-) : null}
+              {canManagePayments ? (
+                <Link
+                  href="/panel/pagos/lotes"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Lotes
+                </Link>
+              ) : null}
 
-<Link
-  href="/panel/pagos"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Pagos
-</Link>
+              {hasPlanFeature(
+                context.planCode,
+                "payments",
+              ) ? (
+                <Link
+                  href="/panel/pagos"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Pagos
+                </Link>
+              ) : null}
 
               {canManagePayments ? (
                 <Link
@@ -172,12 +257,24 @@ export default async function PanelLayout({
                 Datos del club
               </Link>
 
+              {hasPlanFeature(
+                context.planCode,
+                "exports",
+              ) ? (
+                <Link
+                  href="/panel/exportaciones"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Exportaciones
+                </Link>
+              ) : null}
+
               <Link
-  href="/panel/exportaciones"
-  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
->
-  Exportaciones
-</Link>
+                href="/panel/plan"
+                className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+              >
+                Mi plan
+              </Link>
 
               <Link
                 href={`/clubes/${context.clubSlug}`}
@@ -188,7 +285,9 @@ export default async function PanelLayout({
                 Ver página pública
               </Link>
 
-              <form action={logout}>
+              <form
+                action={logout}
+              >
                 <button
                   type="submit"
                   className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold transition hover:bg-slate-100"
