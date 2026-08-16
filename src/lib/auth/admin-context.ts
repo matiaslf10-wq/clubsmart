@@ -8,11 +8,17 @@ type OrganizationRole =
   | "operator"
   | "viewer";
 
+type ServiceStatus =
+  | "pending"
+  | "active"
+  | "suspended";
+
 export type AdminContext = {
   userId: string;
   userEmail: string | null;
   organizationId: string;
   organizationName: string;
+  serviceStatus: ServiceStatus;
   role: OrganizationRole;
   clubId: string;
   clubName: string;
@@ -22,18 +28,20 @@ export type AdminContext = {
 export async function getAdminContext(): Promise<AdminContext> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } =
-    await supabase.auth.getClaims();
+  const {
+    data: claimsData,
+    error: claimsError,
+  } = await supabase.auth.getClaims();
 
   const userId =
     typeof claimsData?.claims.sub === "string"
       ? claimsData.claims.sub
       : null;
 
-      const userEmail =
-  typeof claimsData?.claims.email === "string"
-    ? claimsData.claims.email
-    : null;
+  const userEmail =
+    typeof claimsData?.claims.email === "string"
+      ? claimsData.claims.email
+      : null;
 
   if (claimsError || !userId) {
     redirect("/login");
@@ -57,9 +65,7 @@ export async function getAdminContext(): Promise<AdminContext> {
   }
 
   if (!membership) {
-    throw new Error(
-      "El usuario no está vinculado con ninguna organización.",
-    );
+    redirect("/alta-club");
   }
 
   const {
@@ -67,8 +73,15 @@ export async function getAdminContext(): Promise<AdminContext> {
     error: organizationError,
   } = await supabase
     .from("organizations")
-    .select("id, name")
-    .eq("id", membership.organization_id)
+    .select(`
+      id,
+      name,
+      service_status
+    `)
+    .eq(
+      "id",
+      membership.organization_id,
+    )
     .maybeSingle();
 
   if (organizationError) {
@@ -78,17 +91,39 @@ export async function getAdminContext(): Promise<AdminContext> {
   }
 
   if (!organization) {
-    throw new Error("La organización no existe.");
+    throw new Error(
+      "La organización no existe.",
+    );
   }
 
-  const { data: club, error: clubError } =
-    await supabase
-      .from("clubs")
-      .select("id, name, slug")
-      .eq("organization_id", organization.id)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle();
+  const serviceStatus =
+    organization.service_status as ServiceStatus;
+
+  /*
+   * Este es el único candado comercial
+   * del panel.
+   *
+   * Todos los clubes pendientes o
+   * suspendidos son enviados a la
+   * pantalla de activación.
+   */
+  if (serviceStatus !== "active") {
+    redirect("/activacion");
+  }
+
+  const {
+    data: club,
+    error: clubError,
+  } = await supabase
+    .from("clubs")
+    .select("id, name, slug")
+    .eq(
+      "organization_id",
+      organization.id,
+    )
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
 
   if (clubError) {
     throw new Error(
@@ -105,11 +140,18 @@ export async function getAdminContext(): Promise<AdminContext> {
   return {
     userId,
     userEmail,
-    organizationId: organization.id,
-    organizationName: organization.name,
-    role: membership.role as OrganizationRole,
-    clubId: club.id,
-    clubName: club.name,
-    clubSlug: club.slug,
+    organizationId:
+      organization.id,
+    organizationName:
+      organization.name,
+    serviceStatus,
+    role:
+      membership.role as OrganizationRole,
+    clubId:
+      club.id,
+    clubName:
+      club.name,
+    clubSlug:
+      club.slug,
   };
 }
