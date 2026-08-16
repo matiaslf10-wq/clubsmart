@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ClubForm } from "@/app/panel/club/club-form";
+import {
+  setClubPublication,
+} from "@/app/panel/club/actions";
 import { ImageUploader } from "@/app/panel/image-uploader";
 import {
   removeClubImage,
   updateClubImage,
 } from "@/app/panel/media-actions";
-import { ClubForm } from "@/app/panel/club/club-form";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,7 +45,8 @@ export default async function ClubSettingsPage() {
         primary_color,
         secondary_color,
         logo_url,
-        cover_image_url
+        cover_image_url,
+        is_published
       `)
       .eq("id", context.clubId)
       .eq(
@@ -103,15 +107,103 @@ export default async function ClubSettingsPage() {
           </p>
         </div>
 
-        <Link
-          href={`/clubes/${club.slug}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
-          Ver página pública
-        </Link>
+        {club.is_published ? (
+          <Link
+            href={`/clubes/${club.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Ver página pública
+          </Link>
+        ) : null}
       </div>
+
+      <section
+        className={`mt-8 rounded-2xl border p-6 ${
+          club.is_published
+            ? "border-green-200 bg-green-50"
+            : "border-blue-200 bg-blue-50"
+        }`}
+      >
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-bold text-slate-900">
+                Página pública
+              </h2>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  club.is_published
+                    ? "bg-green-100 text-green-800"
+                    : "bg-white text-blue-800"
+                }`}
+              >
+                {club.is_published
+                  ? "Publicada"
+                  : "No publicada"}
+              </span>
+            </div>
+
+            {club.is_published ? (
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+                La página del club ya está
+                disponible públicamente. Podés
+                seguir modificando la información
+                cuando quieras.
+              </p>
+            ) : (
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+                Podés publicar el club ahora
+                mismo. No hace falta completar
+                todos los datos antes: logo,
+                actividades, horarios y demás
+                información se pueden agregar
+                después.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {club.is_published ? (
+              <Link
+                href={`/clubes/${club.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Ver página
+              </Link>
+            ) : null}
+
+            <form action={setClubPublication}>
+              <input
+                type="hidden"
+                name="published"
+                value={
+                  club.is_published
+                    ? "false"
+                    : "true"
+                }
+              />
+
+              <button
+                type="submit"
+                className={
+                  club.is_published
+                    ? "w-full rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    : "w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                }
+              >
+                {club.is_published
+                  ? "Despublicar página"
+                  : "Publicar página"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <ImageUploader

@@ -43,6 +43,56 @@ function canManageClub(role: string) {
   return role === "owner" || role === "admin";
 }
 
+export async function setClubPublication(
+  formData: FormData,
+): Promise<void> {
+  const context = await getAdminContext();
+
+  if (!canManageClub(context.role)) {
+    throw new Error(
+      "Tu usuario no tiene permisos para modificar la publicación del club.",
+    );
+  }
+
+  const value = readText(
+    formData,
+    "published",
+  );
+
+  const published =
+    value === "true";
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("clubs")
+    .update({
+      is_published: published,
+    })
+    .eq("id", context.clubId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    );
+
+  if (error) {
+    console.error(
+      "Error cambiando la publicación del club:",
+      error,
+    );
+
+    throw new Error(
+      `No fue posible cambiar el estado de publicación: ${error.message}`,
+    );
+  }
+
+  revalidatePath("/panel");
+  revalidatePath("/panel/club");
+  revalidatePath(
+    `/clubes/${context.clubSlug}`,
+  );
+}
+
 export async function updateClub(
   _previousState: ClubFormState,
   formData: FormData,
