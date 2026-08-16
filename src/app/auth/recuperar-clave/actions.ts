@@ -44,11 +44,11 @@ export async function requestPasswordReset(
   const supabase =
     await createClient();
 
-  const redirectTo =
-    process.env.NODE_ENV ===
-    "development"
-      ? "http://localhost:3000/auth/callback"
-      : "https://clubsmart.vercel.app/auth/callback";
+ const redirectTo =
+  process.env.NODE_ENV ===
+  "development"
+    ? "http://localhost:3000/auth/callback?next=/auth/nueva-clave"
+    : "https://clubsmart.vercel.app/auth/callback?next=/auth/nueva-clave";
 
   const {
     error,

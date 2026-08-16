@@ -6,20 +6,38 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+function getSafeNextPath(
+  value: string | null,
+) {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  ) {
+    return "/panel";
+  }
+
+  return value;
+}
+
 export async function GET(
   request: Request,
 ) {
-  const {
-    searchParams,
-    origin,
-  } =
+  const url =
     new URL(
       request.url,
     );
 
   const code =
-    searchParams.get(
+    url.searchParams.get(
       "code",
+    );
+
+  const next =
+    getSafeNextPath(
+      url.searchParams.get(
+        "next",
+      ),
     );
 
   if (
@@ -38,25 +56,24 @@ export async function GET(
     if (
       !error
     ) {
-      /*
-       * El código ya fue intercambiado
-       * por una sesión válida.
-       *
-       * Ahora permitimos elegir
-       * una nueva contraseña.
-       */
       return NextResponse.redirect(
-        `${origin}/auth/nueva-clave`,
+        new URL(
+          next,
+          url.origin,
+        ),
       );
     }
 
     console.error(
-      "No fue posible completar la recuperación:",
+      "No fue posible completar el flujo de autenticación:",
       error.message,
     );
   }
 
   return NextResponse.redirect(
-    `${origin}/auth/error`,
+    new URL(
+      "/auth/error",
+      url.origin,
+    ),
   );
 }
