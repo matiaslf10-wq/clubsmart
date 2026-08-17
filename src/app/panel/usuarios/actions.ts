@@ -13,8 +13,8 @@ import {
 } from "@/lib/audit/write-audit-log";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 
 import {
   canManageUsers,
@@ -79,7 +79,9 @@ export async function updateOrganizationUserRole(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "users",
+  );
 
   if (
     !canManageUsers(
@@ -281,8 +283,9 @@ export async function removeOrganizationUser(
   _formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
-
+  await requirePlanFeature(
+    "users",
+  );
   if (
     !canManageUsers(
       context.role,
@@ -457,7 +460,9 @@ export async function inviteOrganizationUser(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "users",
+  );
 
   if (
     !canManageUsers(

@@ -9,8 +9,8 @@ import {
 } from "next/navigation";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 
 import {
   canSendNotifications,
@@ -105,7 +105,9 @@ export async function createNotification(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "notifications",
+  );
 
   if (
     !canSendNotifications(

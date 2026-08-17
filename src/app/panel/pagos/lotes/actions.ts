@@ -8,8 +8,8 @@ import {
 } from "next/navigation";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 import {
   createAdminClient,
 } from "@/lib/supabase/admin";
@@ -172,7 +172,9 @@ export async function createPaymentBatch(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   const year =
     readInteger(
@@ -900,7 +902,9 @@ export async function markPaymentBatchReady(
   month: number,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (
     !canManagePayments(
@@ -1039,7 +1043,9 @@ export async function cancelPaymentBatch(
   month: number,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (
     !canManagePayments(
@@ -1131,7 +1137,9 @@ export async function refreshPaymentBatch(
   month: number,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (
     !canManagePayments(

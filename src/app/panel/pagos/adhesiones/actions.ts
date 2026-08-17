@@ -8,7 +8,9 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function canManagePayments(role: string) {
@@ -78,7 +80,9 @@ export async function createAdhesionInvitation(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -366,7 +370,9 @@ export async function revokeAdhesionInvitation(
   invitationId: string,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(

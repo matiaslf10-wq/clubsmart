@@ -17,8 +17,8 @@ import {
 } from "@/lib/audit/write-audit-log";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 
 import {
   canManageFees,
@@ -186,7 +186,9 @@ export async function generateMonthlyFees(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "fees",
+  );
 
   const year =
     readInteger(
@@ -764,7 +766,9 @@ export async function registerManualPayment(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "fees",
+  );
 
   if (
     !canManageFees(
@@ -1213,7 +1217,9 @@ export async function markMonthlyFeeExempt(
   month: number,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "fees",
+  );
 
   if (
     !canManageFees(

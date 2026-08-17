@@ -1,12 +1,12 @@
 "use server";
 
-import {
-  redirect,
-} from "next/navigation";
+import { redirect } from "next/navigation";
 
-import {
-  createClient,
-} from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+
+type SignupPlan =
+  | "essential"
+  | "pro";
 
 function readText(
   formData: FormData,
@@ -20,37 +20,47 @@ function readText(
     : "";
 }
 
-function redirectToRegistration(
-  type: "error" | "sent",
-  message?: string,
-): never {
-  const parameters =
-    new URLSearchParams();
-
-  parameters.set(
-    type,
-    type === "sent"
-      ? "1"
-      : message ?? "Ocurrió un error.",
-  );
-
-  redirect(
-    `/registro?${parameters.toString()}`,
+function isSignupPlan(
+  value: string,
+): value is SignupPlan {
+  return (
+    value === "essential" ||
+    value === "pro"
   );
 }
 
-function getSignupCallbackUrl() {
+function getSiteUrl() {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (configuredUrl) {
+    return configuredUrl.replace(
+      /\/$/,
+      "",
+    );
+  }
+
   if (
     process.env.NODE_ENV ===
     "development"
   ) {
-    return "http://localhost:3000/auth/callback?next=/alta-club";
+    return "http://localhost:3000";
   }
 
-  return "https://clubsmart.vercel.app/auth/callback?next=/alta-club";
+  return "https://clubsmart.vercel.app";
 }
 
-export async function signUp(
+function redirectWithError(
+  message: string,
+) {
+  redirect(
+    `/registro?error=${encodeURIComponent(
+      message,
+    )}`,
+  );
+}
+
+export async function registerClubOwner(
   formData: FormData,
 ): Promise<void> {
   const email =
@@ -71,24 +81,25 @@ export async function signUp(
       "password_confirmation",
     );
 
-  const emailIsValid =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      email,
+  const plan =
+    readText(
+      formData,
+      "plan_code",
     );
 
-  if (!emailIsValid) {
-    redirectToRegistration(
-      "error",
+  if (
+    !email ||
+    !email.includes("@")
+  ) {
+    redirectWithError(
       "Ingresá un correo electrónico válido.",
     );
   }
 
   if (
-    password.length <
-    8
+    password.length < 8
   ) {
-    redirectToRegistration(
-      "error",
+    redirectWithError(
       "La contraseña debe tener al menos 8 caracteres.",
     );
   }
@@ -97,14 +108,24 @@ export async function signUp(
     password !==
     passwordConfirmation
   ) {
-    redirectToRegistration(
-      "error",
+    redirectWithError(
       "Las contraseñas no coinciden.",
+    );
+  }
+
+  if (
+    !isSignupPlan(plan)
+  ) {
+    redirectWithError(
+      "Seleccioná un plan válido.",
     );
   }
 
   const supabase =
     await createClient();
+
+  const siteUrl =
+    getSiteUrl();
 
   const {
     data,
@@ -116,44 +137,37 @@ export async function signUp(
 
       options: {
         emailRedirectTo:
-          getSignupCallbackUrl(),
+          `${siteUrl}/auth/callback?next=/alta-club`,
+
+        data: {
+          plan_code: plan,
+        },
       },
     });
 
   if (error) {
     console.error(
-      "No fue posible registrar el usuario:",
-      error.message,
+      "Error registrando usuario:",
+      error,
     );
 
-    redirectToRegistration(
-      "error",
-      "No fue posible crear la cuenta. Revisá los datos e intentá nuevamente.",
-    );
-  }
-
-  /*
-   * Normalmente, con confirmación
-   * de email habilitada, todavía
-   * no tendremos sesión.
-   *
-   * Si Supabase estuviera configurado
-   * con confirmación automática,
-   * continuamos directamente.
-   */
-  if (
-    data.session
-  ) {
-    redirect(
-      "/alta-club",
+    redirectWithError(
+      `No fue posible crear la cuenta: ${error.message}`,
     );
   }
 
   /*
-   * No revelamos información adicional
-   * sobre cuentas preexistentes.
+   * Si Supabase devuelve sesión
+   * inmediatamente, por ejemplo
+   * en un entorno sin confirmación
+   * obligatoria de email, seguimos
+   * directamente al alta del club.
    */
-  redirectToRegistration(
-    "sent",
+  if (data.session) {
+    redirect("/alta-club");
+  }
+
+  redirect(
+    `/registro?sent=1&plan=${plan}`,
   );
 }

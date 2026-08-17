@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ProviderMode =
@@ -140,7 +142,9 @@ async function getPagoTicConfiguration(
 
 export async function startPagoTicSetup(): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -252,7 +256,9 @@ export async function savePagoTicSetup(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -494,7 +500,9 @@ export async function savePagoTicSetup(
 
 export async function suspendPagoTic(): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -557,7 +565,9 @@ export async function suspendPagoTic(): Promise<void> {
 
 export async function reactivatePagoTic(): Promise<void> {
   const context =
-    await getAdminContext();
+  await requirePlanFeature(
+    "payments",
+  );
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(

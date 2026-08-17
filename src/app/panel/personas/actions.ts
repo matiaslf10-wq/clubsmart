@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 import { createClient } from "@/lib/supabase/server";
 import {
   canManageMembers,
@@ -403,7 +405,10 @@ export async function createMember(
   _previousState: MemberFormState,
   formData: FormData,
 ): Promise<MemberFormState> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "members",
+  );
 
   if (!canManageMembers(context.role)) {
     return {
@@ -587,7 +592,10 @@ export async function updateMember(
   _previousState: MemberFormState,
   formData: FormData,
 ): Promise<MemberFormState> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "members",
+  );
 
   if (!canManageMembers(context.role)) {
     return {
@@ -770,7 +778,10 @@ export async function deactivateMember(
 ): Promise<{
   error: string | null;
 }> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "members",
+  );
 
   if (!canManageMembers(context.role)) {
     return {
@@ -891,7 +902,10 @@ export async function reactivateMember(
 ): Promise<{
   error: string | null;
 }> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "members",
+  );
 
   if (!canManageMembers(context.role)) {
     return {

@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  requirePlanFeature,
+} from "@/lib/plans/require-feature";
 import { createClient } from "@/lib/supabase/server";
 
 type FeeRate = {
@@ -109,7 +111,10 @@ export async function createFeeRate(
   activityId: string,
   formData: FormData,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "fees",
+  );
 
   if (!canManageRates(context.role)) {
     redirectWithMessage(
@@ -373,7 +378,10 @@ export async function deleteFutureFeeRate(
   activityId: string,
   rateId: string,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context =
+  await requirePlanFeature(
+    "fees",
+  );
 
   if (!canManageRates(context.role)) {
     redirectWithMessage(
