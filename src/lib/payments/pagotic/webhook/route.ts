@@ -1027,10 +1027,6 @@ export async function POST(
     "/panel/pagos/adhesiones",
   );
 
-  revalidatePath(
-    `/clubes/${subscription.club_id}/pagar/adhesion/resultado`,
-  );
-
   return NextResponse.json({
     received: true,
     processed: true,

@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
-
 import { getAdminContext } from "@/lib/auth/admin-context";
+import {
+  hasPlanFeature,
+} from "@/lib/plans/features";
 import {
   csvResponse,
   type CsvRow,
@@ -197,6 +199,20 @@ export async function GET(
 ) {
   const context =
     await getAdminContext();
+
+    if (
+  !hasPlanFeature(
+    context.planCode,
+    "exports",
+  )
+) {
+  return new Response(
+    "Tu plan no incluye exportaciones.",
+    {
+      status: 403,
+    },
+  );
+}
 
   if (
   !canExportData(
