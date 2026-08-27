@@ -1,5 +1,5 @@
--- REVIEW-ONLY: proposed member card credential structure and read policies.
--- This file has not been applied to Supabase.
+-- Applied to Supabase on 2026-08-27.
+-- Creates the member card credential structure and read policies.
 -- No public QR verification endpoint is created here.
 
 -- A credential is deliberately separate from members.id. The token is the
