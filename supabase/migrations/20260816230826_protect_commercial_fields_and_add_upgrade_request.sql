@@ -1,0 +1,4 @@
+-- Historical migration marker.
+-- This version was already applied remotely before the ClubSmart baseline
+-- was fully versioned in this repository.
+-- Intentionally no-op. See supabase/BASELINE.md.

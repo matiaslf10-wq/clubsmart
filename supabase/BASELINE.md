@@ -31,3 +31,24 @@ La migracion de reconciliacion comercial de suscripciones es deliberadamente
 acotada. Versiona la infraestructura de `subscriptions` que necesita el
 resolver sobre el baseline existente, pero no pretende solucionar el baseline
 completo de ClubSmart.
+## Marcadores de migraciones históricas
+
+Las versiones remotas comprendidas entre `20260816161319` y
+`20260823052226` fueron aplicadas antes de que el historial completo del
+baseline estuviera versionado en este repositorio.
+
+Para permitir que Supabase CLI compare correctamente el historial local con el
+remoto, el repositorio contiene archivos `.sql` para esas versiones que son
+intencionalmente no-op.
+intencionalmente no-op.
+
+Estos archivos:
+
+- no recrean objetos;
+- no modifican datos;
+- no deben volver a ejecutarse contra una base vacía como sustituto de un
+  baseline completo;
+- existen únicamente para representar localmente versiones que ya figuran como
+  aplicadas en el historial remoto.
+
+El rebaseline completo continúa siendo una tarea técnica separada.
