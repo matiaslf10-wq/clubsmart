@@ -215,7 +215,7 @@ begin
     and a.attname = 'id';
 
   if column_default is null
-    or regexp_replace(lower(column_default), '\s+', '', 'g') not in (
+    or regexp_replace(lower(column_default), '[[:space:]]+', '', 'g') not in (
       'gen_random_uuid()',
       'public.gen_random_uuid()'
     ) then
@@ -232,7 +232,7 @@ begin
     and a.attname = 'plan';
 
   if column_default is null
-    or regexp_replace(lower(column_default), '\s+', '', 'g') not in (
+    or regexp_replace(lower(column_default), '[[:space:]]+', '', 'g') not in (
       '''essential''::public.subscription_plan',
       '''essential''::subscription_plan'
     ) then
@@ -249,7 +249,7 @@ begin
     and a.attname = 'status';
 
   if column_default is null
-    or regexp_replace(lower(column_default), '\s+', '', 'g') not in (
+    or regexp_replace(lower(column_default), '[[:space:]]+', '', 'g') not in (
       '''trial''::public.subscription_status',
       '''trial''::subscription_status'
     ) then
@@ -270,7 +270,7 @@ begin
       and a.attname = required_value;
 
     if column_default is null
-      or regexp_replace(lower(column_default), '\s+', '', 'g') not in (
+      or regexp_replace(lower(column_default), '[[:space:]]+', '', 'g') not in (
         'now()',
         'current_timestamp'
       ) then
@@ -428,14 +428,11 @@ begin
     and p.polname = 'Owners and admins can read subscriptions';
 
   if found then
-    normalized_policy_qual := replace(
-      replace(
-        regexp_replace(lower(coalesce(policy_qual, '')), '\s+', '', 'g'),
-        '(',
-        ''
-      ),
-      ')',
-      ''
+    normalized_policy_qual := regexp_replace(
+      lower(coalesce(policy_qual, '')),
+      '[[:space:]]+',
+      '',
+      'g'
     );
 
     if policy_command <> 'r'
