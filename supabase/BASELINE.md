@@ -31,7 +31,7 @@ La migracion de reconciliacion comercial de suscripciones es deliberadamente
 acotada. Versiona la infraestructura de `subscriptions` que necesita el
 resolver sobre el baseline existente, pero no pretende solucionar el baseline
 completo de ClubSmart.
-## Marcadores de migraciones histÃ³ricas
+## Marcadores de migraciones historicas
 
 Las versiones remotas comprendidas entre `20260816161319` y
 `20260823052226` fueron aplicadas antes de que el historial completo del
@@ -45,9 +45,9 @@ Estos archivos:
 
 - no recrean objetos;
 - no modifican datos;
-- no deben volver a ejecutarse contra una base vacÃ­a como sustituto de un
+- no deben volver a ejecutarse contra una base vacia como sustituto de un
   baseline completo;
-- existen Ãºnicamente para representar localmente versiones que ya figuran como
+- existen unicamente para representar localmente versiones que ya figuran como
   aplicadas en el historial remoto.
 
-El rebaseline completo continÃºa siendo una tarea tÃ©cnica separada.
+El rebaseline completo continua siendo una tarea tecnica separada.
