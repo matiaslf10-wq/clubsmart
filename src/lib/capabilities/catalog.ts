@@ -32,3 +32,32 @@ export const CAPABILITY_PLAN_CODES = [
 ] as const;
 
 export type CapabilityPlanCode = (typeof CAPABILITY_PLAN_CODES)[number];
+
+export function isCapabilityKey(value: unknown): value is CapabilityKey {
+  return (
+    typeof value === "string" &&
+    (CAPABILITY_KEYS as readonly string[]).includes(value)
+  );
+}
+export function normalizeCapabilities(value: unknown): CapabilityKey[] {
+  if (!Array.isArray(value)) {
+    throw new Error("El contrato de capabilities devolvió un valor inválido.");
+  }
+
+  if (value.some((item) => typeof item !== "string")) {
+    throw new Error(
+      "El contrato de capabilities contiene un valor no textual.",
+    );
+  }
+
+  return value.filter(isCapabilityKey);
+}
+
+export function isCapabilityPlanCode(
+  value: unknown,
+): value is CapabilityPlanCode {
+  return (
+    typeof value === "string" &&
+    (CAPABILITY_PLAN_CODES as readonly string[]).includes(value)
+  );
+}
