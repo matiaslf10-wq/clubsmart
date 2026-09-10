@@ -2,111 +2,104 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logout } from "@/app/panel/actions";
-import {
-  PendingReservationsLink,
-} from "@/app/panel/reservas/pending-reservations-link";
+import { PendingReservationsLink } from "@/app/panel/reservas/pending-reservations-link";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import {
-  canManageUsers,
-  canViewAudit,
-  canViewNotifications,
+    canManageUsers,
+    canViewAudit,
+    canViewNotifications,
 } from "@/lib/auth/permissions";
-import {
-  hasPlanFeature,
-  PLAN_LABELS,
-} from "@/lib/plans/features";
+import { hasCapability } from "@/lib/capabilities/has-capability";
+import { PLAN_LABELS } from "@/lib/plans/features";
 import { createClient } from "@/lib/supabase/server";
 
-export const dynamic =
-  "force-dynamic";
+export const dynamic = "force-dynamic";
 
 export default async function PanelLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
-  const {
-    data,
-    error,
-  } =
-    await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getClaims();
 
-  if (
-    error ||
-    !data?.claims?.sub
-  ) {
+  if (error || !data?.claims?.sub) {
     redirect("/login");
   }
 
-  const context =
-    await getAdminContext();
+  const context = await getAdminContext();
 
   const canManagePayments =
-    hasPlanFeature(
-      context.planCode,
-      "payments",
-    ) &&
-    (
-      context.role === "owner" ||
-      context.role === "admin"
-    );
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.payments") &&
+    (context.role === "owner" || context.role === "admin");
 
-  const showUsers =
-    hasPlanFeature(
-      context.planCode,
-      "users",
-    ) &&
-    canManageUsers(
-      context.role,
-    );
+  const showUsers = canManageUsers(context.role);
 
   const showAudit =
-    hasPlanFeature(
-      context.planCode,
-      "audit",
-    ) &&
-    canViewAudit(
-      context.role,
-    );
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "organization.audit") &&
+    canViewAudit(context.role);
 
   const showNotifications =
-    hasPlanFeature(
-      context.planCode,
-      "notifications",
-    ) &&
-    canViewNotifications(
-      context.role,
-    );
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.notifications") &&
+    canViewNotifications(context.role);
+
+  const showActivities =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "club.activities");
+
+  const showSpaces =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "club.spaces");
+
+  const showReservations =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.reservations");
+
+  const showMembers =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.directory");
+
+  const showFees =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.fees");
+
+  const showDelinquency =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "club.delinquency");
+
+  const showClubProfile =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "club.profile");
+
+  const showPublicPage =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "club.public_page");
+
+  const showExports =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "organization.exports");
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <Link
-              href="/panel"
-              className="group"
-            >
+            <Link href="/panel" className="group">
               <div className="flex items-center gap-3">
                 <p className="font-bold text-slate-900 transition group-hover:text-blue-700">
                   ClubSmart
                 </p>
 
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                  {
-                    PLAN_LABELS[
-                      context.planCode
-                    ]
-                  }
+                  {PLAN_LABELS[context.planCode]}
                 </span>
               </div>
 
-              <p className="mt-1 text-xs text-slate-500">
-                {context.clubName}
-              </p>
+              <p className="mt-1 text-xs text-slate-500">{context.clubName}</p>
             </Link>
 
             <nav className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -117,10 +110,7 @@ export default async function PanelLayout({
                 Resumen
               </Link>
 
-              {hasPlanFeature(
-                context.planCode,
-                "activities",
-              ) ? (
+              {showActivities ? (
                 <Link
                   href="/panel/actividades"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -129,10 +119,7 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "spaces",
-              ) ? (
+              {showSpaces ? (
                 <Link
                   href="/panel/espacios"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -141,17 +128,9 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "reservations",
-              ) ? (
-                <PendingReservationsLink />
-              ) : null}
+              {showReservations ? <PendingReservationsLink /> : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "members",
-              ) ? (
+              {showMembers ? (
                 <Link
                   href="/panel/personas"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -187,10 +166,7 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "fees",
-              ) ? (
+              {showFees ? (
                 <Link
                   href="/panel/cuotas"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -199,10 +175,7 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "delinquency",
-              ) ? (
+              {showDelinquency ? (
                 <Link
                   href="/panel/morosidad"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -229,10 +202,8 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "payments",
-              ) ? (
+              {context.commercialAccessEnabled &&
+              hasCapability(context.capabilities, "member.payments") ? (
                 <Link
                   href="/panel/pagos"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -250,17 +221,16 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              <Link
-                href="/panel/club"
-                className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-              >
-                Datos del club
-              </Link>
+              {showClubProfile ? (
+                <Link
+                  href="/panel/club"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Datos del club
+                </Link>
+              ) : null}
 
-              {hasPlanFeature(
-                context.planCode,
-                "exports",
-              ) ? (
+              {showExports ? (
                 <Link
                   href="/panel/exportaciones"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
@@ -276,18 +246,18 @@ export default async function PanelLayout({
                 Mi plan
               </Link>
 
-              <Link
-                href={`/clubes/${context.clubSlug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-              >
-                Ver página pública
-              </Link>
+              {showPublicPage ? (
+                <Link
+                  href={`/clubes/${context.clubSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
+                >
+                  Ver página pública
+                </Link>
+              ) : null}
 
-              <form
-                action={logout}
-              >
+              <form action={logout}>
                 <button
                   type="submit"
                   className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold transition hover:bg-slate-100"
@@ -300,9 +270,7 @@ export default async function PanelLayout({
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        {children}
-      </div>
+      <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
     </main>
   );
 }
