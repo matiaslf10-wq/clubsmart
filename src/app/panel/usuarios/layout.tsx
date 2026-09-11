@@ -1,15 +1,11 @@
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { getAdminContext } from "@/lib/auth/admin-context";
 
 export default async function UsuariosLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requirePlanFeature(
-    "users",
-  );
+  await getAdminContext();
 
   return children;
 }

@@ -8,9 +8,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function canManagePayments(role: string) {
@@ -79,10 +77,7 @@ function getExpirationDate(
 export async function createAdhesionInvitation(
   formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("club.payment_link");
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(
@@ -369,10 +364,7 @@ export async function createAdhesionInvitation(
 export async function revokeAdhesionInvitation(
   invitationId: string,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("club.payment_link");
 
   if (!canManagePayments(context.role)) {
     redirectWithMessage(

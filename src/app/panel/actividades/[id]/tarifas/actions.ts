@@ -3,9 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createClient } from "@/lib/supabase/server";
 
 type FeeRate = {
@@ -111,10 +109,7 @@ export async function createFeeRate(
   activityId: string,
   formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "fees",
-  );
+  const context = await requireCapability("member.fees");
 
   if (!canManageRates(context.role)) {
     redirectWithMessage(
@@ -378,10 +373,7 @@ export async function deleteFutureFeeRate(
   activityId: string,
   rateId: string,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "fees",
-  );
+  const context = await requireCapability("member.fees");
 
   if (!canManageRates(context.role)) {
     redirectWithMessage(

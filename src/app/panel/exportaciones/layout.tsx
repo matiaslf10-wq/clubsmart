@@ -1,15 +1,11 @@
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 
 export default async function ExportacionesLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requirePlanFeature(
-    "exports",
-  );
+  await requireCapability("organization.exports");
 
   return children;
 }

@@ -1,11 +1,11 @@
 import { requireCapability } from "@/lib/capabilities/require-capability";
 
-export default async function PersonasLayout({
+export default async function ActividadesLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requireCapability("member.directory");
+  await requireCapability("club.activities");
 
   return children;
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type PageProps = {
@@ -414,7 +414,7 @@ function monthlyFeeStatusLabel(
 export default async function PaymentsPage({
   searchParams,
 }: PageProps) {
-  const context = await getAdminContext();
+  const context = await requireCapability("member.payments");
   const params = await searchParams;
 
   const currentPeriod =

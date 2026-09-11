@@ -1,15 +1,11 @@
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 
 export default async function MorosidadLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requirePlanFeature(
-    "delinquency",
-  );
+  await requireCapability("club.delinquency");
 
   return children;
 }

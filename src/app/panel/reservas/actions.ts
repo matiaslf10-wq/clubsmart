@@ -17,6 +17,10 @@ import {
 } from "@/lib/auth/admin-context";
 
 import {
+  requireCapability,
+} from "@/lib/capabilities/require-capability";
+
+import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
@@ -116,7 +120,7 @@ export async function createManualReservation(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   const spaceId =
     readText(
@@ -1046,7 +1050,7 @@ export async function confirmReservation(
   _formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   if (
     !canManageReservations(
@@ -1108,7 +1112,7 @@ export async function rejectReservation(
   _formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   if (
     !canManageReservations(
@@ -1170,7 +1174,7 @@ export async function cancelReservation(
   _formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   if (
     !canManageReservations(
@@ -1289,7 +1293,7 @@ export async function recordManualReservationPayment(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   if (
     !canManageReservations(
@@ -1565,7 +1569,7 @@ export async function cancelManualReservationPayment(
   _formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("member.reservations");
 
   if (
     !canManageReservations(

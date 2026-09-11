@@ -23,8 +23,8 @@ import {
 } from "@/lib/audit/write-audit-log";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requireCapability,
+} from "@/lib/capabilities/require-capability";
 
 import {
   canManageActivities,
@@ -268,7 +268,7 @@ export async function createActivity(
   formData: FormData,
 ): Promise<ActivityFormState> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.activities");
 
   if (
     !canManageActivities(
@@ -599,7 +599,7 @@ export async function updateActivity(
   formData: FormData,
 ): Promise<ActivityFormState> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.activities");
 
   if (
     !canManageActivities(
@@ -930,7 +930,7 @@ export async function deleteActivity(
   error: string | null;
 }> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.activities");
 
   if (
     !canManageActivities(

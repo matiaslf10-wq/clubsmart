@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createClient } from "@/lib/supabase/server";
 
 const MEDIA_BUCKET = "club-media";
@@ -74,7 +74,7 @@ export async function updateClubImage(
   publicUrl: string,
   storagePath: string,
 ): Promise<MediaActionState> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.profile");
 
   if (!canManageMedia(context.role)) {
     return {
@@ -191,7 +191,7 @@ export async function updateClubImage(
 export async function removeClubImage(
   kind: ClubImageKind,
 ): Promise<MediaActionState> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.profile");
 
   if (!canManageMedia(context.role)) {
     return {
@@ -284,7 +284,7 @@ export async function updateActivityImage(
   publicUrl: string,
   storagePath: string,
 ): Promise<MediaActionState> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.activities");
 
   if (!canManageMedia(context.role)) {
     return {
@@ -386,7 +386,7 @@ export async function updateActivityImage(
 export async function removeActivityImage(
   activityId: string,
 ): Promise<MediaActionState> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.activities");
 
   if (!canManageMedia(context.role)) {
     return {

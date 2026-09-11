@@ -1,15 +1,11 @@
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 
 export default async function NotificacionesLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requirePlanFeature(
-    "notifications",
-  );
+  await requireCapability("member.notifications");
 
   return children;
 }

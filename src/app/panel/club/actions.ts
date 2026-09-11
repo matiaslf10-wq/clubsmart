@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getAdminContext } from "@/lib/auth/admin-context";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createClient } from "@/lib/supabase/server";
 
 export type ClubFormState = {
@@ -46,7 +46,7 @@ function canManageClub(role: string) {
 export async function setClubPublication(
   formData: FormData,
 ): Promise<void> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.public_page");
 
   if (!canManageClub(context.role)) {
     throw new Error(
@@ -97,7 +97,7 @@ export async function updateClub(
   _previousState: ClubFormState,
   formData: FormData,
 ): Promise<ClubFormState> {
-  const context = await getAdminContext();
+  const context = await requireCapability("club.profile");
 
   if (!canManageClub(context.role)) {
     return {

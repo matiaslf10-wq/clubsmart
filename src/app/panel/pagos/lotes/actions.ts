@@ -7,9 +7,7 @@ import {
   redirect,
 } from "next/navigation";
 
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import {
   createAdminClient,
 } from "@/lib/supabase/admin";
@@ -171,10 +169,7 @@ function revalidateBatchPages() {
 export async function createPaymentBatch(
   formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("member.payments");
 
   const year =
     readInteger(
@@ -901,10 +896,7 @@ export async function markPaymentBatchReady(
   year: number,
   month: number,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("member.payments");
 
   if (
     !canManagePayments(
@@ -1042,10 +1034,7 @@ export async function cancelPaymentBatch(
   year: number,
   month: number,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("member.payments");
 
   if (
     !canManagePayments(
@@ -1136,10 +1125,7 @@ export async function refreshPaymentBatch(
   year: number,
   month: number,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "payments",
-  );
+  const context = await requireCapability("member.payments");
 
   if (
     !canManagePayments(

@@ -1,15 +1,11 @@
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 
 export default async function TarifasLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requirePlanFeature(
-    "fees",
-  );
+  await requireCapability("member.fees");
 
   return children;
 }

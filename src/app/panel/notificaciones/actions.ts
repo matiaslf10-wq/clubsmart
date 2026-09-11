@@ -8,9 +8,7 @@ import {
   redirect,
 } from "next/navigation";
 
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 
 import {
   canSendNotifications,
@@ -105,9 +103,7 @@ export async function createNotification(
   formData: FormData,
 ): Promise<void> {
   const context =
-  await requirePlanFeature(
-    "notifications",
-  );
+  await requireCapability("member.notifications");
 
   if (
     !canSendNotifications(

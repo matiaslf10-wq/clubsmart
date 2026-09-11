@@ -13,8 +13,8 @@ import {
 } from "@/lib/audit/write-audit-log";
 
 import {
-  getAdminContext,
-} from "@/lib/auth/admin-context";
+  requireCapability,
+} from "@/lib/capabilities/require-capability";
 
 import {
   canManageSpaces,
@@ -859,7 +859,7 @@ export async function createSpace(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.spaces");
 
   if (
     !canManageSpaces(
@@ -1194,7 +1194,7 @@ export async function updateSpace(
   formData: FormData,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.spaces");
 
   if (
     !canManageSpaces(
@@ -1739,7 +1739,7 @@ export async function toggleSpaceActive(
   nextActive: boolean,
 ): Promise<void> {
   const context =
-    await getAdminContext();
+    await requireCapability("club.spaces");
 
   if (
     !canManageSpaces(

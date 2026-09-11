@@ -12,9 +12,7 @@ import {
   writeAuditLog,
 } from "@/lib/audit/write-audit-log";
 
-import {
-  requirePlanFeature,
-} from "@/lib/plans/require-feature";
+import { getAdminContext } from "@/lib/auth/admin-context";
 
 import {
   canManageUsers,
@@ -78,10 +76,7 @@ export async function updateOrganizationUserRole(
   userId: string,
   formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "users",
-  );
+  const context = await getAdminContext();
 
   if (
     !canManageUsers(
@@ -282,10 +277,7 @@ export async function removeOrganizationUser(
   userId: string,
   _formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "users",
-  );
+  const context = await getAdminContext();
   if (
     !canManageUsers(
       context.role,
@@ -459,10 +451,7 @@ export async function removeOrganizationUser(
 export async function inviteOrganizationUser(
   formData: FormData,
 ): Promise<void> {
-  const context =
-  await requirePlanFeature(
-    "users",
-  );
+  const context = await getAdminContext();
 
   if (
     !canManageUsers(

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { canManageMembers } from "@/lib/auth/permissions";
-import { requirePlanFeature } from "@/lib/plans/require-feature";
+import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createClient } from "@/lib/supabase/server";
 
 export type MemberFormState = {
@@ -325,7 +325,7 @@ export async function createMember(
   _previousState: MemberFormState,
   formData: FormData,
 ): Promise<MemberFormState> {
-  const context = await requirePlanFeature("members");
+  const context = await requireCapability("member.directory");
 
   if (!canManageMembers(context.role)) {
     return {
@@ -464,7 +464,7 @@ export async function updateMember(
   _previousState: MemberFormState,
   formData: FormData,
 ): Promise<MemberFormState> {
-  const context = await requirePlanFeature("members");
+  const context = await requireCapability("member.directory");
 
   if (!canManageMembers(context.role)) {
     return {
@@ -604,7 +604,7 @@ export async function updateMember(
 export async function deactivateMember(memberId: string): Promise<{
   error: string | null;
 }> {
-  const context = await requirePlanFeature("members");
+  const context = await requireCapability("member.directory");
 
   if (!canManageMembers(context.role)) {
     return {
@@ -697,7 +697,7 @@ export async function deactivateMember(memberId: string): Promise<{
 export async function reactivateMember(memberId: string): Promise<{
   error: string | null;
 }> {
-  const context = await requirePlanFeature("members");
+  const context = await requireCapability("member.directory");
 
   if (!canManageMembers(context.role)) {
     return {
@@ -764,7 +764,7 @@ function revalidateMemberPages(memberId?: string) {
 }
 
 async function getMemberForCardAction(memberId: string) {
-  const context = await requirePlanFeature("members");
+  const context = await requireCapability("member.card");
 
   if (context.role !== "owner" && context.role !== "admin") {
     return {
