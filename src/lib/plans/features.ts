@@ -18,6 +18,8 @@ export type PlanFeature =
   | "exports"
   | "audit";
 
+// Deprecated: retained only for Pago TIC compatibility and plan presentation.
+
 export const PLAN_LABELS: Record<
   PlanCode,
   string
@@ -77,12 +79,12 @@ const essentialFeatures: PlanFeature[] = [
   "club_profile",
   "public_page",
   "activities",
-  "spaces",
-  "reservations",
   "payment_link",
 ];
 
 const proOnlyFeatures: PlanFeature[] = [
+  "spaces",
+  "reservations",
   "members",
   "fees",
   "delinquency",
