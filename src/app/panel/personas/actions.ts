@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { canManageMembers } from "@/lib/auth/permissions";
 import { requireCapability } from "@/lib/capabilities/require-capability";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type MemberFormState = {
@@ -28,6 +29,53 @@ type MemberPayload = {
 };
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+const linkedPeopleRelations = new Set(["self", "guardian", "authorized"]);
+
+function redirectToMemberEdit(
+  memberId: string,
+  status: "success" | "error",
+  message: string,
+) {
+  const params = new URLSearchParams({ status, message });
+  redirect(`/panel/personas/${memberId}/editar?${params.toString()}`);
+}
+
+async function requireLinkedPeopleAdmin(memberId: string) {
+  const context = await requireCapability("member.linked_people");
+
+  if (context.role !== "owner" && context.role !== "admin") {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "Tu usuario no tiene permisos para gestionar cuentas vinculadas.",
+    );
+  }
+
+  const supabase = createAdminClient();
+  const { data: member, error } = await supabase
+    .from("members")
+    .select("id, first_name, last_name")
+    .eq("id", memberId)
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .maybeSingle();
+
+  if (error || !member) {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "La persona no existe o no pertenece al club.",
+    );
+    throw new Error("Member validation did not redirect.");
+  }
+
+  return { context, member, supabase };
+}
+
+function validLinkedPeopleRelation(value: string) {
+  return linkedPeopleRelations.has(value);
+}
 
 function readText(formData: FormData, field: string) {
   const value = formData.get(field);
@@ -890,4 +938,272 @@ export async function reissueMemberCardCredential(
     error: null,
     success: "Se generó un nuevo carnet correctamente.",
   };
+}
+
+export async function linkMemberAccount(
+  memberId: string,
+  formData: FormData,
+): Promise<void> {
+  const { context, member } = await requireLinkedPeopleAdmin(memberId);
+  const email = readText(formData, "email").toLowerCase();
+  const relationType = readText(formData, "relation_type");
+
+  if (!isValidEmail(email) || !email) {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "Ingresá un correo electrónico válido.",
+    );
+  }
+
+  if (!validLinkedPeopleRelation(relationType)) {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "El tipo de relación no es válido.",
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data: resolvedUserId, error: resolveError } = await admin.rpc(
+    "resolve_auth_user_id_by_email",
+    { requested_email: email },
+  );
+
+  if (resolveError) {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible resolver la cuenta.",
+    );
+  }
+
+  let linkedUserId = resolvedUserId as string | null;
+  let invitedUser = false;
+
+  if (!linkedUserId) {
+    const { data: invitationData, error: invitationError } =
+      await admin.auth.admin.inviteUserByEmail(email, {
+        redirectTo: "https://clubsmart.vercel.app/auth/crear-clave",
+        data: {
+          invited_member_id: memberId,
+          invited_member_name: `${member.first_name} ${member.last_name}`,
+          invited_relation_type: relationType,
+          invited_club_id: context.clubId,
+        },
+      });
+
+    if (invitationError || !invitationData.user) {
+      redirectToMemberEdit(
+        memberId,
+        "error",
+        invitationError?.message ?? "No fue posible enviar la invitación.",
+      );
+      throw new Error("Invitation validation did not redirect.");
+    }
+
+    linkedUserId = invitationData.user.id;
+    invitedUser = true;
+  }
+
+  const { data: existingAccount, error: accountReadError } = await admin
+    .from("member_accounts")
+    .select("id, active, relation_type")
+    .eq("member_id", memberId)
+    .eq("user_id", linkedUserId)
+    .maybeSingle();
+
+  if (accountReadError) {
+    if (invitedUser && linkedUserId)
+      await admin.auth.admin.deleteUser(linkedUserId);
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible consultar el vínculo.",
+    );
+    throw new Error("Account validation did not redirect.");
+  }
+
+  if (existingAccount?.active) {
+    if (invitedUser && linkedUserId)
+      await admin.auth.admin.deleteUser(linkedUserId);
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "Esta cuenta ya está vinculada a la persona.",
+    );
+  }
+
+  const { error: accountError } = existingAccount
+    ? await admin
+        .from("member_accounts")
+        .update({ active: true, relation_type: relationType })
+        .eq("id", existingAccount.id)
+    : await admin.from("member_accounts").insert({
+        member_id: memberId,
+        user_id: linkedUserId,
+        relation_type: relationType,
+        active: true,
+      });
+
+  if (accountError) {
+    if (invitedUser && linkedUserId)
+      await admin.auth.admin.deleteUser(linkedUserId);
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible guardar el vínculo.",
+    );
+  }
+
+  await writeAuditLog(context, {
+    action: existingAccount
+      ? "member.account.reactivated"
+      : "member.account.linked",
+    entityType: "member_account",
+    entityId: existingAccount?.id ?? linkedUserId,
+    summary: existingAccount
+      ? "Reactivó una cuenta vinculada."
+      : "Vinculó una cuenta al socio.",
+    metadata: {
+      member_id: memberId,
+      linked_user_id: linkedUserId,
+      email,
+      relation_type: relationType,
+    },
+  });
+
+  if (existingAccount && existingAccount.relation_type !== relationType) {
+    await writeAuditLog(context, {
+      action: "member.account.relation_updated",
+      entityType: "member_account",
+      entityId: existingAccount.id,
+      summary: "Actualizó la relación de una cuenta vinculada.",
+      metadata: {
+        member_id: memberId,
+        linked_user_id: linkedUserId,
+        email,
+        relation_type: relationType,
+      },
+    });
+  }
+
+  revalidateMemberPages(memberId);
+  redirectToMemberEdit(
+    memberId,
+    "success",
+    invitedUser
+      ? "Se envió una invitación y la cuenta quedó vinculada."
+      : "La cuenta quedó vinculada correctamente.",
+  );
+}
+
+export async function updateMemberAccountRelation(
+  accountId: string,
+  memberId: string,
+  formData: FormData,
+): Promise<void> {
+  const { context, supabase } = await requireLinkedPeopleAdmin(memberId);
+  const relationType = readText(formData, "relation_type");
+
+  if (!validLinkedPeopleRelation(relationType)) {
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "El tipo de relación no es válido.",
+    );
+  }
+
+  const { data: account, error: accountReadError } = await supabase
+    .from("member_accounts")
+    .select("id, user_id, relation_type")
+    .eq("id", accountId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (accountReadError || !account) {
+    redirectToMemberEdit(memberId, "error", "El vínculo no existe.");
+    throw new Error("Account validation did not redirect.");
+  }
+
+  const { error } = await supabase
+    .from("member_accounts")
+    .update({ relation_type: relationType })
+    .eq("id", accountId)
+    .eq("member_id", memberId);
+
+  if (error)
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible actualizar la relación.",
+    );
+
+  await writeAuditLog(context, {
+    action: "member.account.relation_updated",
+    entityType: "member_account",
+    entityId: accountId,
+    summary: "Actualizó la relación de una cuenta vinculada.",
+    metadata: {
+      member_id: memberId,
+      linked_user_id: account.user_id,
+      relation_type: relationType,
+    },
+  });
+  revalidateMemberPages(memberId);
+  redirectToMemberEdit(
+    memberId,
+    "success",
+    "La relación fue actualizada correctamente.",
+  );
+}
+
+export async function setMemberAccountActive(
+  accountId: string,
+  memberId: string,
+  active: boolean,
+): Promise<void> {
+  const { context, supabase } = await requireLinkedPeopleAdmin(memberId);
+  const { data: account, error: accountReadError } = await supabase
+    .from("member_accounts")
+    .select("id, user_id, active")
+    .eq("id", accountId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (accountReadError || !account) {
+    redirectToMemberEdit(memberId, "error", "El vínculo no existe.");
+    throw new Error("Account validation did not redirect.");
+  }
+
+  const { error } = await supabase
+    .from("member_accounts")
+    .update({ active })
+    .eq("id", accountId)
+    .eq("member_id", memberId);
+
+  if (error)
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible actualizar el estado.",
+    );
+
+  await writeAuditLog(context, {
+    action: active
+      ? "member.account.reactivated"
+      : "member.account.deactivated",
+    entityType: "member_account",
+    entityId: accountId,
+    summary: active
+      ? "Reactivó una cuenta vinculada."
+      : "Desactivó una cuenta vinculada.",
+    metadata: { member_id: memberId, linked_user_id: account.user_id },
+  });
+  revalidateMemberPages(memberId);
+  redirectToMemberEdit(
+    memberId,
+    "success",
+    active ? "El vínculo fue reactivado." : "El vínculo fue desactivado.",
+  );
 }
