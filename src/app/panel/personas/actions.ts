@@ -1207,3 +1207,48 @@ export async function setMemberAccountActive(
     active ? "El vínculo fue reactivado." : "El vínculo fue desactivado.",
   );
 }
+
+export async function unlinkMemberAccount(
+  accountId: string,
+  memberId: string,
+): Promise<void> {
+  const { context, supabase } = await requireLinkedPeopleAdmin(memberId);
+  const { data: account, error: accountReadError } = await supabase
+    .from("member_accounts")
+    .select("id, user_id")
+    .eq("id", accountId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (accountReadError || !account) {
+    redirectToMemberEdit(memberId, "error", "El vínculo no existe.");
+    throw new Error("Account validation did not redirect.");
+  }
+
+  const { error } = await supabase
+    .from("member_accounts")
+    .delete()
+    .eq("id", accountId)
+    .eq("member_id", memberId);
+
+  if (error)
+    redirectToMemberEdit(
+      memberId,
+      "error",
+      "No fue posible desvincular la cuenta.",
+    );
+
+  await writeAuditLog(context, {
+    action: "member.account.unlinked",
+    entityType: "member_account",
+    entityId: accountId,
+    summary: "Desvinculó una cuenta del socio.",
+    metadata: { member_id: memberId, linked_user_id: account.user_id },
+  });
+  revalidateMemberPages(memberId);
+  redirectToMemberEdit(
+    memberId,
+    "success",
+    "La cuenta fue desvinculada correctamente.",
+  );
+}

@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import {
     linkMemberAccount,
     setMemberAccountActive,
+    unlinkMemberAccount,
     updateMember,
     updateMemberAccountRelation,
 } from "@/app/panel/personas/actions";
@@ -308,6 +309,11 @@ export default async function EditMemberPage({
                   id,
                   false,
                 );
+                const unlinkAction = unlinkMemberAccount.bind(
+                  null,
+                  account.id,
+                  id,
+                );
 
                 return (
                   <div
@@ -357,6 +363,14 @@ export default async function EditMemberPage({
                           className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
                         >
                           {account.active ? "Desactivar" : "Reactivar"}
+                        </button>
+                      </form>
+                      <form action={unlinkAction}>
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                        >
+                          Desvincular
                         </button>
                       </form>
                     </div>
