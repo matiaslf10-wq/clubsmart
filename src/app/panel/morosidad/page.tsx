@@ -422,6 +422,7 @@ export default async function DelinquencyPage({
           [
             "paid",
             "cancelled",
+            "exempt",
             "void",
           ].includes(
             fee.status,

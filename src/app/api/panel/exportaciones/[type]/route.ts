@@ -568,6 +568,7 @@ export async function GET(
             [
               "paid",
               "cancelled",
+              "exempt",
               "void",
             ].includes(
               fee.status,
