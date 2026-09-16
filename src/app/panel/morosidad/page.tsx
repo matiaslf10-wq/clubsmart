@@ -275,12 +275,13 @@ export default async function DelinquencyPage({
     await getAdminContext();
 
   if (
-  !canViewDelinquency(
-    context.role,
-  )
-) {
-  redirect("/panel");
-}
+    !canViewDelinquency(
+      context.role,
+      context.financialPermissions,
+    )
+  ) {
+    redirect("/panel");
+  }
 
   const parameters =
     await searchParams;

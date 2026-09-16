@@ -20,6 +20,7 @@ import { requireCapability } from "@/lib/capabilities/require-capability";
 
 import {
   canManageFees,
+  canRecordPayments,
 } from "@/lib/auth/permissions";
 
 import {
@@ -208,18 +209,19 @@ export async function generateMonthlyFees(
     ) ??
     10;
 
-  if (
-    !canManageFees(
-      context.role,
-    )
-  ) {
-    redirectWithMessage(
-      year,
-      month,
-      "error",
-      "Tu usuario no tiene permisos para generar cuotas.",
-    );
-  }
+if (
+  !canManageFees(
+    context.role,
+    context.financialPermissions,
+  )
+) {
+  redirectWithMessage(
+    year,
+    month,
+    "error",
+    "Tu usuario no tiene permisos para generar cuotas.",
+  );
+}
 
   if (
     year < 2020 ||
@@ -764,18 +766,19 @@ export async function registerManualPayment(
   const context =
   await requireCapability("member.fees");
 
-  if (
-    !canManageFees(
-      context.role,
-    )
-  ) {
-    redirectWithMessage(
-      year,
-      month,
-      "error",
-      "Tu usuario no tiene permisos para registrar pagos.",
-    );
-  }
+if (
+  !canRecordPayments(
+    context.role,
+    context.financialPermissions,
+  )
+) {
+  redirectWithMessage(
+    year,
+    month,
+    "error",
+    "Tu usuario no tiene permisos para registrar pagos.",
+  );
+}
 
   const amountText =
     readText(
@@ -1216,6 +1219,7 @@ export async function markMonthlyFeeExempt(
   if (
     !canManageFees(
       context.role,
+      context.financialPermissions,
     )
   ) {
     redirectWithMessage(

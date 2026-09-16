@@ -1,5 +1,11 @@
 import Link from "next/link";
-
+import { redirect } from "next/navigation";
+import {
+  canConfigurePayments,
+  canManageFees,
+  canRecordPayments,
+  canViewFees,
+} from "@/lib/auth/permissions";
 import {
   generateMonthlyFees,
   markMonthlyFeeExempt,
@@ -273,6 +279,16 @@ export default async function MonthlyFeesPage({
   searchParams,
 }: PageProps) {
   const context = await getAdminContext();
+
+  if (
+    !canViewFees(
+      context.role,
+      context.financialPermissions,
+    )
+  ) {
+    redirect("/panel");
+  }
+
   const params = await searchParams;
 
   const currentPeriod =
@@ -494,9 +510,20 @@ export default async function MonthlyFeesPage({
         "overdue",
     ).length;
 
-  const canManage =
-    context.role === "owner" ||
-    context.role === "admin";
+  const canManageFeeOperations =
+    canManageFees(
+      context.role,
+      context.financialPermissions,
+    );
+
+  const canRecordPaymentOperations =
+    canRecordPayments(
+      context.role,
+      context.financialPermissions,
+    );
+
+  const canConfigurePaymentProviders =
+    canConfigurePayments(context.role);
 
   return (
     <div>
@@ -517,12 +544,14 @@ export default async function MonthlyFeesPage({
           </p>
         </div>
 
-        <Link
-          href="/panel/pagos/configuracion"
-          className="inline-flex justify-center rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
-        >
-          Configurar proveedores
-        </Link>
+        {canConfigurePaymentProviders ? (
+          <Link
+            href="/panel/pagos/configuracion"
+            className="inline-flex justify-center rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+          >
+            Configurar proveedores
+          </Link>
+        ) : null}
       </div>
 
       {params.error ? (
@@ -543,6 +572,7 @@ export default async function MonthlyFeesPage({
         </div>
       ) : null}
 
+{canManageFeeOperations ? (
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-bold text-slate-900">
           Generar cuotas
@@ -629,7 +659,7 @@ export default async function MonthlyFeesPage({
           <div className="flex items-end">
             <button
               type="submit"
-              disabled={!canManage}
+              disabled={!canManageFeeOperations}
               className="w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Generar cuotas
@@ -637,6 +667,7 @@ export default async function MonthlyFeesPage({
           </div>
         </form>
       </section>
+      ) : null}
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -955,8 +986,10 @@ export default async function MonthlyFeesPage({
                 </div>
 
                 {canReceivePayment &&
-                canManage ? (
+                (canRecordPaymentOperations ||
+                  canManageFeeOperations) ? (
                   <div className="mt-6 grid gap-4 border-t border-slate-200 pt-6 xl:grid-cols-[1fr_auto]">
+                    {canRecordPaymentOperations ? (
                     <form
                       action={paymentAction}
                       className="grid gap-4 sm:grid-cols-[1fr_1.5fr_auto]"
@@ -1009,7 +1042,9 @@ export default async function MonthlyFeesPage({
                         </button>
                       </div>
                     </form>
+                    ) : null}
 
+                    {canManageFeeOperations ? (
                     <form
                       action={exemptAction}
                       className="flex items-end"
@@ -1021,6 +1056,7 @@ export default async function MonthlyFeesPage({
                         Marcar exenta
                       </button>
                     </form>
+                    ) : null}
                   </div>
                 ) : null}
               </article>

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
+import { canViewPayments } from "@/lib/auth/permissions";
 import { requireCapability } from "@/lib/capabilities/require-capability";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -415,6 +417,15 @@ export default async function PaymentsPage({
   searchParams,
 }: PageProps) {
   const context = await requireCapability("member.payments");
+  if (
+    !canViewPayments(
+      context.role,
+      context.financialPermissions,
+    )
+  ) {
+    redirect("/panel");
+  }
+
   const params = await searchParams;
 
   const currentPeriod =

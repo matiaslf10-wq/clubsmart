@@ -7,7 +7,10 @@ import { getAdminContext } from "@/lib/auth/admin-context";
 import {
     canManageUsers,
     canViewAudit,
+    canViewDelinquency,
+    canViewFees,
     canViewNotifications,
+    canViewPayments,
 } from "@/lib/auth/permissions";
 import { hasCapability } from "@/lib/capabilities/has-capability";
 import { PLAN_LABELS } from "@/lib/plans/features";
@@ -65,11 +68,18 @@ export default async function PanelLayout({
 
   const showFees =
     context.commercialAccessEnabled &&
-    hasCapability(context.capabilities, "member.fees");
+    hasCapability(context.capabilities, "member.fees") &&
+    canViewFees(context.role, context.financialPermissions);
+
+  const showPayments =
+    context.commercialAccessEnabled &&
+    hasCapability(context.capabilities, "member.payments") &&
+    canViewPayments(context.role, context.financialPermissions);
 
   const showDelinquency =
     context.commercialAccessEnabled &&
-    hasCapability(context.capabilities, "club.delinquency");
+    hasCapability(context.capabilities, "club.delinquency") &&
+    canViewDelinquency(context.role, context.financialPermissions);
 
   const showClubProfile =
     context.commercialAccessEnabled &&
@@ -202,8 +212,7 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {context.commercialAccessEnabled &&
-              hasCapability(context.capabilities, "member.payments") ? (
+              {showPayments ? (
                 <Link
                   href="/panel/pagos"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
