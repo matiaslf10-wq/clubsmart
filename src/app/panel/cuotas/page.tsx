@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import {
   canConfigurePayments,
   canManageFees,
-  canRecordPayments,
   canViewFees,
 } from "@/lib/auth/permissions";
 import {
@@ -516,12 +515,6 @@ export default async function MonthlyFeesPage({
       context.financialPermissions,
     );
 
-  const canRecordPaymentOperations =
-    canRecordPayments(
-      context.role,
-      context.financialPermissions,
-    );
-
   const canConfigurePaymentProviders =
     canConfigurePayments(context.role);
 
@@ -986,10 +979,8 @@ export default async function MonthlyFeesPage({
                 </div>
 
                 {canReceivePayment &&
-                (canRecordPaymentOperations ||
-                  canManageFeeOperations) ? (
+                canManageFeeOperations ? (
                   <div className="mt-6 grid gap-4 border-t border-slate-200 pt-6 xl:grid-cols-[1fr_auto]">
-                    {canRecordPaymentOperations ? (
                     <form
                       action={paymentAction}
                       className="grid gap-4 sm:grid-cols-[1fr_1.5fr_auto]"
@@ -1042,9 +1033,7 @@ export default async function MonthlyFeesPage({
                         </button>
                       </div>
                     </form>
-                    ) : null}
 
-                    {canManageFeeOperations ? (
                     <form
                       action={exemptAction}
                       className="flex items-end"
@@ -1056,7 +1045,6 @@ export default async function MonthlyFeesPage({
                         Marcar exenta
                       </button>
                     </form>
-                    ) : null}
                   </div>
                 ) : null}
               </article>
