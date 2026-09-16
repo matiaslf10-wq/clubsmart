@@ -4,6 +4,12 @@ export type ClubRole =
   | "operator"
   | "viewer";
 
+export type FinancialPermissionOverrides = {
+  canManageFees: boolean;
+  canRecordPayments: boolean;
+  canViewDelinquency: boolean;
+};
+
 export type ClubPermission =
   | "club.settings.manage"
 
@@ -116,18 +122,10 @@ const permissionsByRole: Record<
     "members.view",
     "members.manage",
 
-    "fees.view",
-    "fees.manage",
-
-    "payments.view",
-    "payments.record",
-
     "reservations.view",
     "reservations.manage",
 
     "spaces.view",
-
-    "delinquency.view",
 
     "notifications.view",
 "notifications.send",
@@ -214,9 +212,31 @@ export function canManageSpaces(
   );
 }
 
+export function canViewFees(
+  role: string | null | undefined,
+  financialPermissions?: FinancialPermissionOverrides | null,
+) {
+  if (role === "operator") {
+    return (
+      financialPermissions?.canManageFees === true ||
+      financialPermissions?.canRecordPayments === true
+    );
+  }
+
+  return hasPermission(
+    role,
+    "fees.view",
+  );
+}
+
 export function canViewPayments(
   role: string | null | undefined,
+  financialPermissions?: FinancialPermissionOverrides | null,
 ) {
+  if (role === "operator") {
+    return financialPermissions?.canRecordPayments === true;
+  }
+
   return hasPermission(
     role,
     "payments.view",
@@ -225,7 +245,12 @@ export function canViewPayments(
 
 export function canRecordPayments(
   role: string | null | undefined,
+  financialPermissions?: FinancialPermissionOverrides | null,
 ) {
+  if (role === "operator") {
+    return financialPermissions?.canRecordPayments === true;
+  }
+
   return hasPermission(
     role,
     "payments.record",
@@ -243,7 +268,12 @@ export function canConfigurePayments(
 
 export function canViewDelinquency(
   role: string | null | undefined,
+  financialPermissions?: FinancialPermissionOverrides | null,
 ) {
+  if (role === "operator") {
+    return financialPermissions?.canViewDelinquency === true;
+  }
+
   return hasPermission(
     role,
     "delinquency.view",
@@ -279,7 +309,12 @@ export function canManageMembers(
 
 export function canManageFees(
   role: string | null | undefined,
+  financialPermissions?: FinancialPermissionOverrides | null,
 ) {
+  if (role === "operator") {
+    return financialPermissions?.canManageFees === true;
+  }
+
   return hasPermission(
     role,
     "fees.manage",

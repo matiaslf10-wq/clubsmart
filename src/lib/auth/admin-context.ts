@@ -53,6 +53,11 @@ export type AdminContext = {
   hasPlanConflict: boolean;
 
   role: OrganizationRole;
+  financialPermissions: {
+    canManageFees: boolean;
+    canRecordPayments: boolean;
+    canViewDelinquency: boolean;
+  };
 
   clubId: string;
   clubName: string;
@@ -101,7 +106,7 @@ export async function getAdminContext(): Promise<AdminContext> {
 
   const { data: membership, error: membershipError } = await supabase
     .from("organization_users")
-    .select("organization_id, role")
+    .select("organization_id, role, can_manage_fees, can_record_payments, can_view_delinquency")
     .eq("user_id", userId)
     .eq("active", true)
     .limit(1)
@@ -225,6 +230,12 @@ export async function getAdminContext(): Promise<AdminContext> {
     hasPlanConflict: capabilitiesContext.hasPlanConflict,
 
     role: membership.role as OrganizationRole,
+
+    financialPermissions: {
+      canManageFees: membership.can_manage_fees === true,
+      canRecordPayments: membership.can_record_payments === true,
+      canViewDelinquency: membership.can_view_delinquency === true,
+    },
 
     clubId: club.id,
 
