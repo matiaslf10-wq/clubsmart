@@ -49,11 +49,7 @@ export async function PendingReservationsLink() {
 
   return (
     <Link
-      href={
-        pendingCount > 0
-          ? "/panel/reservas/pendientes"
-          : "/panel/reservas"
-      }
+      href="/panel/reservas"
       className="flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-blue-700"
     >
       <span>

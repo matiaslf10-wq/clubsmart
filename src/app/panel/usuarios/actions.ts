@@ -202,9 +202,21 @@ export async function updateOrganizationUserRole(
       "organization_users",
     )
     .update({
-      role:
-        newRole,
-    })
+  role:
+    newRole,
+
+  can_view_fees:
+    false,
+
+  can_manage_fees:
+    false,
+
+  can_record_payments:
+    false,
+
+  can_view_delinquency:
+    false,
+})
     .eq(
       "organization_id",
       context.organizationId,
@@ -264,6 +276,194 @@ export async function updateOrganizationUserRole(
   redirectToUsers(
     "success",
     "El rol fue actualizado correctamente.",
+  );
+}
+
+export async function updateOperatorFinancialPermissions(
+  userId: string,
+  formData: FormData,
+): Promise<void> {
+  const context =
+    await getAdminContext();
+
+  if (
+    !canManageUsers(
+      context.role,
+    )
+  ) {
+    redirect("/panel");
+  }
+
+  if (!isUuid(userId)) {
+    redirectToUsers(
+      "error",
+      "El usuario no es válido.",
+    );
+  }
+
+  if (
+    userId ===
+    context.userId
+  ) {
+    redirectToUsers(
+      "error",
+      "No podés modificar tus propios permisos desde esta pantalla.",
+    );
+  }
+
+  const canViewFees =
+    formData.has(
+      "can_view_fees",
+    );
+
+  const canRecordPayments =
+    formData.has(
+      "can_record_payments",
+    );
+
+  const canViewDelinquency =
+    formData.has(
+      "can_view_delinquency",
+    );
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: membership,
+    error: membershipError,
+  } = await supabase
+    .from(
+      "organization_users",
+    )
+    .select(`
+      user_id,
+      role,
+      can_view_fees,
+      can_record_payments,
+      can_view_delinquency
+    `)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "user_id",
+      userId,
+    )
+    .maybeSingle();
+
+  if (
+    membershipError ||
+    !membership
+  ) {
+    redirectToUsers(
+      "error",
+      "El usuario no pertenece a esta organización.",
+    );
+  }
+
+  if (
+    membership.role !==
+    "operator"
+  ) {
+    redirectToUsers(
+      "error",
+      "Los permisos financieros individuales solo se configuran para Operador/Profesor.",
+    );
+  }
+
+  const {
+    error: updateError,
+  } = await supabase
+    .from(
+      "organization_users",
+    )
+    .update({
+      can_view_fees:
+        canViewFees,
+
+      can_manage_fees:
+        false,
+
+      can_record_payments:
+        canRecordPayments,
+
+      can_view_delinquency:
+        canViewDelinquency,
+    })
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "user_id",
+      userId,
+    );
+
+  if (updateError) {
+    redirectToUsers(
+      "error",
+      `No fue posible actualizar los permisos: ${updateError.message}`,
+    );
+  }
+
+  await writeAuditLog(
+    context,
+    {
+      action:
+        "user.financial_permissions_changed",
+
+      entityType:
+        "user",
+
+      entityId:
+        userId,
+
+      summary:
+        "Actualizó los permisos financieros de un Operador/Profesor.",
+
+      metadata: {
+        target_user_id:
+          userId,
+
+        previous: {
+          can_view_fees:
+            membership.can_view_fees,
+
+          can_record_payments:
+            membership.can_record_payments,
+
+          can_view_delinquency:
+            membership.can_view_delinquency,
+        },
+
+        current: {
+          can_view_fees:
+            canViewFees,
+
+          can_record_payments:
+            canRecordPayments,
+
+          can_view_delinquency:
+            canViewDelinquency,
+        },
+      },
+    },
+  );
+
+  revalidatePath(
+    "/panel/usuarios",
+  );
+
+  revalidatePath(
+    "/panel",
+    "layout",
+  );
+
+  redirectToUsers(
+    "success",
+    "Los permisos del Operador/Profesor fueron actualizados.",
   );
 }
 

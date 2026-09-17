@@ -26,6 +26,10 @@ import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
+import {
+  canManageReservations,
+} from "@/lib/auth/permissions";
+
 export const dynamic =
   "force-dynamic";
 
@@ -80,11 +84,12 @@ export default async function NewReservationPage({
     await getAdminContext();
 
   if (
-    context.role !== "owner" &&
-    context.role !== "admin"
-  ) {
-    redirect("/panel");
-  }
+  !canManageReservations(
+    context.role,
+  )
+) {
+  redirect("/panel");
+}
 
   const parameters =
     await searchParams;

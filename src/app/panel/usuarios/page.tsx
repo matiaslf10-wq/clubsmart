@@ -17,6 +17,7 @@ import {
 import {
   inviteOrganizationUser,
   removeOrganizationUser,
+  updateOperatorFinancialPermissions,
   updateOrganizationUserRole,
 } from "@/app/panel/usuarios/actions";
 
@@ -33,6 +34,9 @@ type PageProps = {
 type MembershipRow = {
   user_id: string;
   role: string;
+  can_view_fees: boolean;
+  can_record_payments: boolean;
+  can_view_delinquency: boolean;
 };
 
 type TeamUser = {
@@ -50,6 +54,10 @@ type TeamUser = {
 
   createdAt:
     string | null;
+
+   canViewFees: boolean;
+   canRecordPayments: boolean;
+   canViewDelinquency: boolean;
 };
 
 const roleLabels:
@@ -186,9 +194,12 @@ export default async function UsersPage({
       "organization_users",
     )
     .select(`
-      user_id,
-      role
-    `)
+  user_id,
+  role,
+  can_view_fees,
+  can_record_payments,
+  can_view_delinquency
+`)
     .eq(
       "organization_id",
       context.organizationId,
@@ -236,53 +247,71 @@ export default async function UsersPage({
             !data.user
           ) {
             return {
-              userId:
-                membership.user_id,
+  userId:
+    membership.user_id,
 
-              email:
-                "Usuario no disponible",
+  email:
+    "Usuario no disponible",
 
-              role:
-                membership.role,
+  role:
+    membership.role,
 
-              emailConfirmed:
-                false,
+  emailConfirmed:
+    false,
 
-              lastSignInAt:
-                null,
+  lastSignInAt:
+    null,
 
-              createdAt:
-                null,
-            };
+  createdAt:
+    null,
+
+  canViewFees:
+    membership.can_view_fees === true,
+
+  canRecordPayments:
+    membership.can_record_payments === true,
+
+  canViewDelinquency:
+    membership.can_view_delinquency === true,
+};
           }
 
           return {
-            userId:
-              membership.user_id,
+  userId:
+    membership.user_id,
 
-            email:
-              data.user.email ??
-              "Sin email",
+  email:
+    data.user.email ??
+    "Sin email",
 
-            role:
-              membership.role,
+  role:
+    membership.role,
 
-            emailConfirmed:
-              Boolean(
-                data.user
-                  .email_confirmed_at,
-              ),
+  emailConfirmed:
+    Boolean(
+      data.user
+        .email_confirmed_at,
+    ),
 
-            lastSignInAt:
-              data.user
-                .last_sign_in_at ??
-              null,
+  lastSignInAt:
+    data.user
+      .last_sign_in_at ??
+    null,
 
-            createdAt:
-              data.user
-                .created_at ??
-              null,
-          };
+  createdAt:
+    data.user
+      .created_at ??
+    null,
+
+  canViewFees:
+    membership.can_view_fees === true,
+
+  canRecordPayments:
+    membership.can_record_payments === true,
+
+  canViewDelinquency:
+    membership.can_view_delinquency === true,
+};
         },
       ),
     );
@@ -586,6 +615,65 @@ export default async function UsersPage({
                         </div>
                       </form>
 
+                      {user.role === "operator" ? (
+  <form
+    action={updateOperatorFinancialPermissions.bind(
+      null,
+      user.userId,
+    )}
+    className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4"
+  >
+    <p className="font-semibold text-slate-900">
+      Permisos financieros
+    </p>
+
+    <p className="mt-1 text-xs text-slate-600">
+      Cuotas siempre es solo lectura para Operador/Profesor.
+    </p>
+
+    <div className="mt-4 space-y-3">
+      <label className="flex items-center gap-3 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          name="can_view_fees"
+          defaultChecked={
+            user.canViewFees
+          }
+        />
+        Ver cuotas
+      </label>
+
+      <label className="flex items-center gap-3 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          name="can_record_payments"
+          defaultChecked={
+            user.canRecordPayments
+          }
+        />
+        Registrar pagos
+      </label>
+
+      <label className="flex items-center gap-3 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          name="can_view_delinquency"
+          defaultChecked={
+            user.canViewDelinquency
+          }
+        />
+        Ver morosidad
+      </label>
+    </div>
+
+    <button
+      type="submit"
+      className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+    >
+      Guardar permisos
+    </button>
+  </form>
+) : null}
                       <div className="mt-4 border-t border-slate-200 pt-4">
                         <form
                           action={removeOrganizationUser.bind(
