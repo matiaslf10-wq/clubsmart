@@ -357,8 +357,9 @@ export default async function ReservationDetailPage({
 
   const canRegisterPayment =
   canRecordPayments(
-    context.role,
-  ) &&
+  context.role,
+  context.financialPermissions,
+) &&
   remainingAmount > 0 &&
   ![
     "rejected",
@@ -579,6 +580,7 @@ export default async function ReservationDetailPage({
 
                     {canRecordPayments(
   context.role,
+  context.financialPermissions,
 ) &&
 payment.source ===
   "manual" &&

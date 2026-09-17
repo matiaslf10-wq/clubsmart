@@ -54,6 +54,7 @@ export type AdminContext = {
 
   role: OrganizationRole;
   financialPermissions: {
+    canViewFees: boolean;
     canManageFees: boolean;
     canRecordPayments: boolean;
     canViewDelinquency: boolean;
@@ -105,12 +106,14 @@ export async function getAdminContext(): Promise<AdminContext> {
   }
 
   const { data: membership, error: membershipError } = await supabase
-    .from("organization_users")
-    .select("organization_id, role, can_manage_fees, can_record_payments, can_view_delinquency")
-    .eq("user_id", userId)
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle();
+  .from("organization_users")
+  .select(
+    "organization_id, role, can_view_fees, can_manage_fees, can_record_payments, can_view_delinquency",
+  )
+  .eq("user_id", userId)
+  .eq("active", true)
+  .limit(1)
+  .maybeSingle();
 
   if (membershipError) {
     throw new Error(
@@ -232,10 +235,11 @@ export async function getAdminContext(): Promise<AdminContext> {
     role: membership.role as OrganizationRole,
 
     financialPermissions: {
-      canManageFees: membership.can_manage_fees === true,
-      canRecordPayments: membership.can_record_payments === true,
-      canViewDelinquency: membership.can_view_delinquency === true,
-    },
+  canViewFees: membership.can_view_fees === true,
+  canManageFees: membership.can_manage_fees === true,
+  canRecordPayments: membership.can_record_payments === true,
+  canViewDelinquency: membership.can_view_delinquency === true,
+},
 
     clubId: club.id,
 

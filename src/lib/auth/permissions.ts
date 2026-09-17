@@ -5,6 +5,7 @@ export type ClubRole =
   | "viewer";
 
 export type FinancialPermissionOverrides = {
+  canViewFees: boolean;
   canManageFees: boolean;
   canRecordPayments: boolean;
   canViewDelinquency: boolean;
@@ -217,10 +218,7 @@ export function canViewFees(
   financialPermissions?: FinancialPermissionOverrides | null,
 ) {
   if (role === "operator") {
-    return (
-      financialPermissions?.canManageFees === true ||
-      financialPermissions?.canRecordPayments === true
-    );
+    return financialPermissions?.canViewFees === true;
   }
 
   return hasPermission(
@@ -311,8 +309,10 @@ export function canManageFees(
   role: string | null | undefined,
   financialPermissions?: FinancialPermissionOverrides | null,
 ) {
+  void financialPermissions;
+
   if (role === "operator") {
-    return financialPermissions?.canManageFees === true;
+    return false;
   }
 
   return hasPermission(

@@ -34,6 +34,7 @@ import {
 
 import {
   canManageReservations,
+  canRecordPayments,
 } from "@/lib/auth/permissions";
 
 import {
@@ -1296,10 +1297,14 @@ export async function recordManualReservationPayment(
     await requireCapability("member.reservations");
 
   if (
-    !canManageReservations(
-      context.role,
-    )
-  ) {
+  !canManageReservations(
+    context.role,
+  ) ||
+  !canRecordPayments(
+    context.role,
+    context.financialPermissions,
+  )
+) {
     redirectToReservation(
       reservationId,
       "error",
@@ -1572,10 +1577,14 @@ export async function cancelManualReservationPayment(
     await requireCapability("member.reservations");
 
   if (
-    !canManageReservations(
-      context.role,
-    )
-  ) {
+  !canManageReservations(
+    context.role,
+  ) ||
+  !canRecordPayments(
+    context.role,
+    context.financialPermissions,
+  )
+) {
     redirectToReservation(
       reservationId,
       "error",
