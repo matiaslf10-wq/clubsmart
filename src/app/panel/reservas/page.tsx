@@ -22,6 +22,7 @@ import {
 } from "@/lib/supabase/admin";
 
 import {
+  canManageReservations,
   canViewReservations,
 } from "@/lib/auth/permissions";
 
@@ -427,6 +428,11 @@ export default async function ReservationsPage({
   redirect("/panel");
 }
 
+  const canManage =
+    canManageReservations(
+      context.role,
+    );
+
   const parameters =
     await searchParams;
 
@@ -663,12 +669,14 @@ export default async function ReservationsPage({
           </p>
         </div>
 
-        <Link
-          href={`/panel/reservas/nueva?fecha=${selectedDate}`}
-          className="inline-flex justify-center rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
-        >
-          Nueva reserva
-        </Link>
+        {canManage ? (
+          <Link
+            href={`/panel/reservas/nueva?fecha=${selectedDate}`}
+            className="inline-flex justify-center rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
+          >
+            Nueva reserva
+          </Link>
+        ) : null}
       </div>
 
       {parameters.success ? (
@@ -836,6 +844,9 @@ export default async function ReservationsPage({
           selectedDate={
             selectedDate
           }
+          canManage={
+            canManage
+          }
         />
       ) : (
         <WeeklyView
@@ -854,11 +865,14 @@ export default async function ReservationsPage({
 function DailyView({
   reservations,
   selectedDate,
+  canManage,
 }: {
   reservations:
     Reservation[];
 
   selectedDate: string;
+
+  canManage: boolean;
 }) {
   if (
     reservations.length === 0
@@ -874,12 +888,14 @@ function DailyView({
           este día.
         </p>
 
-        <Link
-          href={`/panel/reservas/nueva?fecha=${selectedDate}`}
-          className="mt-6 inline-flex rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white"
-        >
-          Crear reserva
-        </Link>
+        {canManage ? (
+          <Link
+            href={`/panel/reservas/nueva?fecha=${selectedDate}`}
+            className="mt-6 inline-flex rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white"
+          >
+            Crear reserva
+          </Link>
+        ) : null}
       </section>
     );
   }
@@ -898,6 +914,9 @@ function DailyView({
             selectedDate={
               selectedDate
             }
+            canManage={
+              canManage
+            }
           />
         ),
       )}
@@ -908,9 +927,11 @@ function DailyView({
 function ReservationCard({
   reservation,
   selectedDate,
+  canManage,
 }: {
   reservation: Reservation;
   selectedDate: string;
+  canManage: boolean;
 }) {
   const space =
     getSingleRelation(
@@ -1078,15 +1099,17 @@ function ReservationCard({
   </Link>
 </div>
 
-      <ReservationActions
-        reservation={
-          reservation
-        }
-        returnDate={
-          selectedDate
-        }
-        view="dia"
-      />
+      {canManage ? (
+        <ReservationActions
+          reservation={
+            reservation
+          }
+          returnDate={
+            selectedDate
+          }
+          view="dia"
+        />
+      ) : null}
     </article>
   );
 }
