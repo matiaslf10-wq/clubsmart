@@ -484,6 +484,39 @@ export default async function ReservationsPage({
   const supabase =
     createAdminClient();
 
+    const {
+    count: totalPendingCount,
+    error: pendingCountError,
+  } = await supabase
+    .from(
+      "space_reservations",
+    )
+    .select(
+      "id",
+      {
+        count: "exact",
+        head: true,
+      },
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .eq(
+      "status",
+      "pending",
+    );
+
+  if (pendingCountError) {
+    throw new Error(
+      `No fue posible contar las reservas pendientes: ${pendingCountError.message}`,
+    );
+  }
+
   const {
     data,
     error,
@@ -553,13 +586,6 @@ export default async function ReservationsPage({
   const reservations =
     (data ??
       []) as unknown as Reservation[];
-
-  const pendingCount =
-    reservations.filter(
-      (reservation) =>
-        reservation.status ===
-        "pending",
-    ).length;
 
   const confirmedCount =
     reservations.filter(
@@ -775,12 +801,17 @@ export default async function ReservationsPage({
           )}
         />
 
-        <SummaryCard
-          label="Pendientes"
-          value={String(
-            pendingCount,
-          )}
-        />
+                <Link
+          href="/panel/reservas/pendientes"
+          className="block"
+        >
+          <SummaryCard
+            label="Pendientes totales"
+            value={String(
+              totalPendingCount ?? 0,
+            )}
+          />
+        </Link>
 
         <SummaryCard
           label="Confirmadas"
