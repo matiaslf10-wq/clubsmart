@@ -13,6 +13,7 @@ type PageProps = {
       sent?: string;
       error?: string;
       plan?: string;
+      pilot?: string;
     }>;
 };
 
@@ -26,6 +27,9 @@ export default async function RegisterPage({
     params.plan === "essential"
       ? "essential"
       : "pro";
+
+  const pilotSignup =
+    params.pilot === "1";
 
   if (
     params.sent === "1"
@@ -69,12 +73,26 @@ export default async function RegisterPage({
             </div>
 
             <p className="mt-6 text-sm leading-6 text-slate-500">
-              Después de confirmar el
-              correo vas a poder crear
-              tu club. La habilitación
-              del servicio se realizará
-              una vez confirmado el
-              pago.
+              {pilotSignup ? (
+                <>
+                  Después de confirmar
+                  el correo vas a poder
+                  crear tu club e
+                  ingresar directamente
+                  al panel con el acceso
+                  piloto.
+                </>
+              ) : (
+                <>
+                  Después de confirmar
+                  el correo vas a poder
+                  crear tu club. La
+                  habilitación del
+                  servicio se realizará
+                  una vez confirmado el
+                  pago.
+                </>
+              )}
             </p>
 
             <Link
@@ -314,6 +332,33 @@ export default async function RegisterPage({
                   className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
+            </div>
+
+            <div className="mt-5">
+              <label
+                htmlFor="pilot_access_code"
+                className="text-sm font-semibold text-slate-800"
+              >
+                Código de acceso piloto{" "}
+                <span className="font-normal text-slate-500">
+                  (opcional)
+                </span>
+              </label>
+
+              <input
+                id="pilot_access_code"
+                name="pilot_access_code"
+                type="text"
+                autoComplete="off"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Si ClubSmart te invitó
+                a una prueba piloto,
+                ingresá acá el código
+                que recibiste.
+              </p>
             </div>
 
             <button

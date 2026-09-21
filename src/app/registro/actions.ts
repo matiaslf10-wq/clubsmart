@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type SignupPlan =
@@ -29,6 +30,19 @@ function isSignupPlan(
   );
 }
 
+function hasValidPilotAccessCode(
+  value: string,
+) {
+  const configuredCode =
+    process.env.CLUBSMART_PILOT_ACCESS_CODE?.trim();
+
+  return Boolean(
+    value &&
+      configuredCode &&
+      value === configuredCode,
+  );
+}
+
 function getSiteUrl() {
   const configuredUrl =
     process.env.NEXT_PUBLIC_SITE_URL;
@@ -52,7 +66,7 @@ function getSiteUrl() {
 
 function redirectWithError(
   message: string,
-) {
+): never {
   redirect(
     `/registro?error=${encodeURIComponent(
       message,
@@ -86,6 +100,29 @@ export async function registerClubOwner(
       formData,
       "plan_code",
     );
+
+  const pilotAccessCode =
+    readText(
+      formData,
+      "pilot_access_code",
+    );
+
+  const requestedPilotAccess =
+    pilotAccessCode.length > 0;
+
+  const pilotAccess =
+    hasValidPilotAccessCode(
+      pilotAccessCode,
+    );
+
+  if (
+    requestedPilotAccess &&
+    !pilotAccess
+  ) {
+    redirectWithError(
+      "El código de acceso piloto no es válido.",
+    );
+  }
 
   if (
     !email ||
@@ -156,6 +193,48 @@ export async function registerClubOwner(
     );
   }
 
+  if (pilotAccess) {
+    if (
+      !data.user ||
+      data.user.identities?.length === 0
+    ) {
+      redirectWithError(
+        "No fue posible crear la cuenta piloto. Probá con otro correo o iniciá sesión si ya tenés una cuenta.",
+      );
+    }
+
+    const admin =
+      createAdminClient();
+
+    const {
+      error: pilotMetadataError,
+    } =
+      await admin.auth.admin.updateUserById(
+        data.user.id,
+        {
+          app_metadata: {
+            ...data.user.app_metadata,
+            clubsmart_pilot_access: true,
+          },
+        },
+      );
+
+    if (pilotMetadataError) {
+      console.error(
+        "No fue posible habilitar el acceso piloto:",
+        pilotMetadataError,
+      );
+
+      await admin.auth.admin.deleteUser(
+        data.user.id,
+      );
+
+      redirectWithError(
+        "No fue posible habilitar el acceso piloto. Intentá nuevamente.",
+      );
+    }
+  }
+
   /*
    * Si Supabase devuelve sesión
    * inmediatamente, por ejemplo
@@ -168,6 +247,6 @@ export async function registerClubOwner(
   }
 
   redirect(
-    `/registro?sent=1&plan=${plan}`,
+    `/registro?sent=1&plan=${plan}${pilotAccess ? "&pilot=1" : ""}`,
   );
 }

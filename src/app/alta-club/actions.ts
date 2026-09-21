@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 function readText(
@@ -80,12 +81,17 @@ export async function createInitialClub(
     );
   }
 
+  const pilotAccess =
+    userData.user.app_metadata
+      ?.clubsmart_pilot_access === true;
+
   const slugBase =
     slugify(
       clubName,
     );
 
   const {
+    data: createdClubs,
     error,
   } =
     await supabase.rpc(
@@ -118,6 +124,50 @@ export async function createInitialClub(
     redirectWithError(
       "No fue posible crear el club. Intentá nuevamente.",
     );
+  }
+
+  if (pilotAccess) {
+    const createdClub =
+      Array.isArray(createdClubs)
+        ? createdClubs[0]
+        : null;
+
+    const organizationId =
+      createdClub &&
+      typeof createdClub.organization_id ===
+        "string"
+        ? createdClub.organization_id
+        : null;
+
+    if (!organizationId) {
+      console.error(
+        "El alta piloto no devolvió una organización válida.",
+      );
+
+      redirect("/activacion");
+    }
+
+    const admin =
+      createAdminClient();
+
+    const {
+      error: activationError,
+    } =
+      await admin
+        .from("organizations")
+        .update({
+          service_status: "active",
+        })
+        .eq("id", organizationId);
+
+    if (activationError) {
+      console.error(
+        "No fue posible activar automáticamente el club piloto:",
+        activationError,
+      );
+
+      redirect("/activacion");
+    }
   }
 
   revalidatePath(

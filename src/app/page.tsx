@@ -175,6 +175,13 @@ export default function HomePage() {
                 Ver club de demostración
               </Link>
 
+              <Link
+                href="/registro"
+                className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500"
+              >
+                Crear mi club
+              </Link>
+
               <a
                 href="#planes"
                 className="rounded-lg border border-white/30 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
