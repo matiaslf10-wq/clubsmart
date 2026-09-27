@@ -153,13 +153,22 @@ export default async function MembersPage({
         </div>
 
         {canManage ? (
-  <Link
-    href="/panel/personas/nueva"
-    className="inline-flex justify-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
-  >
-    Nueva persona
-  </Link>
-) : null}
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/panel/personas/solicitudes"
+              className="inline-flex justify-center rounded-lg border border-blue-200 bg-blue-50 px-5 py-3 font-semibold text-blue-700 transition hover:bg-blue-100"
+            >
+              {"Solicitudes de v\u00EDnculo"}
+            </Link>
+
+            <Link
+              href="/panel/personas/nueva"
+              className="inline-flex justify-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
+            >
+              Nueva persona
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
