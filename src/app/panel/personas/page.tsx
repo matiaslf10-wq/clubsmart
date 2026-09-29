@@ -49,6 +49,10 @@ export default async function MembersPage({
   canManageMembers(
     context.role,
   );
+
+  const canReviewLinkRequests =
+    context.role === "owner" ||
+    context.role === "admin";
   const params = await searchParams;
 
   const status =
@@ -154,12 +158,14 @@ export default async function MembersPage({
 
         {canManage ? (
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/panel/personas/solicitudes"
-              className="inline-flex justify-center rounded-lg border border-blue-200 bg-blue-50 px-5 py-3 font-semibold text-blue-700 transition hover:bg-blue-100"
-            >
-              {"Solicitudes de v\u00EDnculo"}
-            </Link>
+            {canReviewLinkRequests ? (
+              <Link
+                href="/panel/personas/solicitudes"
+                className="inline-flex justify-center rounded-lg border border-blue-200 bg-blue-50 px-5 py-3 font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                {"Solicitudes de v\u00EDnculo"}
+              </Link>
+            ) : null}
 
             <Link
               href="/panel/personas/nueva"
