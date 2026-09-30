@@ -254,15 +254,12 @@ export function MemberForm({
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Seleccioná todas las actividades en las
-          que participa esta persona. Las tarifas
-          se administrarán por separado.
+          Podés seleccionar las actividades en las que participa esta persona. También podés crearla sin asignarle ninguna actividad.
         </p>
 
         {activities.length === 0 ? (
           <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Primero tenés que crear al menos una
-            actividad.
+            No hay actividades activas. Podés crear la persona igualmente.
           </p>
         ) : (
           <div className="mt-6 grid gap-3 md:grid-cols-2">
@@ -304,13 +301,6 @@ export function MemberForm({
           </div>
         )}
 
-        {activities.length > 0 &&
-        selectedActivityIds.length === 0 ? (
-          <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Seleccioná al menos una actividad.
-          </p>
-        ) : null}
-
         {selectedActivityIds.length > 0 ? (
           <p className="mt-4 text-sm text-slate-500">
             Actividades seleccionadas:{" "}
@@ -331,11 +321,7 @@ export function MemberForm({
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={
-            pending ||
-            activities.length === 0 ||
-            selectedActivityIds.length === 0
-          }
+          disabled={pending}
           className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending

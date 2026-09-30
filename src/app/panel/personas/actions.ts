@@ -197,13 +197,6 @@ function readMemberPayload(formData: FormData):
     };
   }
 
-  if (activityIds.length === 0) {
-    return {
-      data: null,
-      error: "Seleccioná al menos una actividad.",
-    };
-  }
-
   return {
     error: null,
     data: {
@@ -223,6 +216,13 @@ async function activitiesBelongToClub(
   organizationId: string,
   clubId: string,
 ) {
+  if (activityIds.length === 0) {
+    return {
+      valid: true,
+      error: null,
+    };
+  }
+
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -453,19 +453,22 @@ export async function createMember(
     };
   }
 
-  const { error: relationError } = await supabase
-    .from("member_activities")
-    .insert(
-      payload.activityIds.map((activityId) => ({
-        organization_id: context.organizationId,
-        club_id: context.clubId,
-        member_id: member.id,
-        activity_id: activityId,
-        active: true,
-        start_date: new Date().toISOString().slice(0, 10),
-        end_date: null,
-      })),
-    );
+  const { error: relationError } =
+    payload.activityIds.length > 0
+      ? await supabase
+          .from("member_activities")
+          .insert(
+            payload.activityIds.map((activityId) => ({
+              organization_id: context.organizationId,
+              club_id: context.clubId,
+              member_id: member.id,
+              activity_id: activityId,
+              active: true,
+              start_date: new Date().toISOString().slice(0, 10),
+              end_date: null,
+            })),
+          )
+      : { error: null };
 
   if (relationError) {
     await supabase
