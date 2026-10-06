@@ -298,3 +298,171 @@ export async function createPagoTicAdhesion({
     form_url: formUrl,
   } as PagoTicAdhesionResponse;
 }
+
+export type PagoTicAdhesionPaymentResponse = {
+  id: string;
+  status?: string;
+  external_transaction_id?:
+    | string
+    | number;
+  collector_id?: string;
+  final_amount?: number;
+  [key: string]: unknown;
+};
+
+type CreatePagoTicAdhesionPaymentInput = {
+  subscriptionId: string;
+  collectorId: string;
+
+  externalTransactionId:
+    | string
+    | number;
+
+  dueDate: string;
+  notificationUrl: string;
+
+  externalReference: string;
+  conceptId: string;
+  conceptDescription: string;
+
+  amount: number;
+};
+
+export async function createPagoTicAdhesionPayment({
+  subscriptionId,
+  collectorId,
+  externalTransactionId,
+  dueDate,
+  notificationUrl,
+  externalReference,
+  conceptId,
+  conceptDescription,
+  amount,
+}: CreatePagoTicAdhesionPaymentInput) {
+  if (
+    !subscriptionId.trim() ||
+    !collectorId.trim() ||
+    !notificationUrl.trim() ||
+    !externalReference.trim() ||
+    !conceptId.trim() ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    throw new Error(
+      "Los datos del cobro de Pago TIC no son válidos.",
+    );
+  }
+
+  const accessToken =
+    await getPagoTicToken();
+
+  const apiUrl =
+    (
+      process.env.PAGOTIC_API_URL?.trim() ||
+      "https://api.paypertic.com"
+    ).replace(/\/$/, "");
+
+  const requestBody = {
+    currency_id: "ARS",
+
+    collector_id:
+      collectorId,
+
+    external_transaction_id:
+      externalTransactionId,
+
+    due_date:
+      dueDate,
+
+    notification_url:
+      notificationUrl,
+
+    details: [
+      {
+        external_reference:
+          externalReference,
+
+        concept_id:
+          conceptId,
+
+        concept_description:
+          conceptDescription,
+
+        amount,
+      },
+    ],
+  };
+
+  const response = await fetch(
+    `${apiUrl}/suscripciones/adhesion/${encodeURIComponent(
+      subscriptionId,
+    )}/pago`,
+    {
+      method: "POST",
+
+      headers: {
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
+
+        "Cache-Control":
+          "no-cache",
+      },
+
+      body:
+        JSON.stringify(
+          requestBody,
+        ),
+
+      cache:
+        "no-store",
+    },
+  );
+
+  const result =
+    await readJsonResponse(
+      response,
+    );
+
+  if (!response.ok) {
+    console.error(
+      "Error creando débito en Pago TIC:",
+      result,
+    );
+
+    const message =
+      typeof result.message ===
+        "string"
+        ? result.message
+        : typeof result.error ===
+            "string"
+          ? result.error
+          : "Pago TIC rechazó la solicitud de débito.";
+
+    throw new Error(message);
+  }
+
+  const id =
+    typeof result.id ===
+      "string"
+      ? result.id
+      : "";
+
+  if (!id) {
+    console.error(
+      "Respuesta incompleta de débito Pago TIC:",
+      result,
+    );
+
+    throw new Error(
+      "Pago TIC no devolvió un identificador de pago válido.",
+    );
+  }
+
+  return {
+    ...result,
+    id,
+  } as PagoTicAdhesionPaymentResponse;
+}
