@@ -67,7 +67,6 @@ export async function reconcilePagoTicPaymentBatch(
   if (
     [
       "draft",
-      "ready",
       "cancelled",
     ].includes(batch.status)
   ) {

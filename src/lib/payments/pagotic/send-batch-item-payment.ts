@@ -5,6 +5,9 @@ import {
   mapPagoTicPaymentStatus,
 } from "@/lib/payments/pagotic/payment-status";
 import {
+  reconcilePagoTicPaymentBatch,
+} from "@/lib/payments/pagotic/reconcile-batch";
+import {
   preparePagoTicBatchItemPayment,
 } from "@/lib/payments/pagotic/prepare-batch-item-payment";
 import {
@@ -495,6 +498,17 @@ export async function sendPagoTicBatchItemPayment(
         ),
     ]);
 
+    try {
+      await reconcilePagoTicPaymentBatch(
+        item.batch_id,
+      );
+    } catch (batchError) {
+      console.error(
+        "No fue posible reconciliar el lote después del error:",
+        batchError,
+      );
+    }
+
     throw error;
   }
 
@@ -670,6 +684,10 @@ export async function sendPagoTicBatchItemPayment(
       item.monthly_fee_id,
     );
   }
+
+  await reconcilePagoTicPaymentBatch(
+    item.batch_id,
+  );
 
   return {
     batchItemId:
