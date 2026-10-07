@@ -205,7 +205,10 @@ export async function preparePagoTicBatchItemPayment(
 
   if (
     batch.provider !== "pagotic" ||
-    batch.status !== "ready"
+    ![
+      "ready",
+      "processing",
+    ].includes(batch.status)
   ) {
     throw new Error(
       "El lote no está listo para enviarse a Pago TIC.",
