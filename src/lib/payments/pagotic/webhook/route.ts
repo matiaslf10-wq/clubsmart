@@ -192,6 +192,9 @@ function createEventKey(
   const providerObjectId =
     getString(payload, "id");
 
+  const providerType =
+    getString(payload, "type");
+
   const providerStatus =
     getString(payload, "status");
 
@@ -205,6 +208,7 @@ function createEventKey(
     getNotificationId(payload);
 
   const value = [
+    providerType,
     providerObjectId,
     providerStatus,
     lastUpdateDate,

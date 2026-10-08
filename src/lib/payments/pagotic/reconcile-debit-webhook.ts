@@ -50,6 +50,7 @@ type BatchItem = {
   monthly_fee_id: string;
   payment_subscription_id: string | null;
   status: string;
+  sent_at: string | null;
 };
 
 export type PagoTicDebitReconciliationResult = {
@@ -669,7 +670,8 @@ export async function reconcilePagoTicDebitWebhook(
       club_id,
       monthly_fee_id,
       payment_subscription_id,
-      status
+      status,
+      sent_at
     `)
     .eq(
       "id",
@@ -872,6 +874,7 @@ export async function reconcilePagoTicDebitWebhook(
           : null,
 
       sent_at:
+        item.sent_at ??
         now,
 
       processed_at:
