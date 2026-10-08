@@ -8,6 +8,9 @@ import {
   refreshPaymentBatch,
   sendPaymentBatch,
 } from "@/app/panel/pagos/lotes/actions";
+import {
+  ConfirmPaymentBatchSendButton,
+} from "@/app/panel/pagos/lotes/confirm-send-button";
 import { getAdminContext } from "@/lib/auth/admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -981,12 +984,9 @@ export default async function PaymentBatchesPage({ searchParams }: PageProps) {
                       selectedMonth,
                     )}
                   >
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-700"
-                    >
-                      Enviar a Pago TIC
-                    </button>
+                    <ConfirmPaymentBatchSendButton
+                      count={selectedBatch.ready_items}
+                    />
                   </form>
                 ) : null}
                 {["draft", "ready"].includes(selectedBatch.status) ? (
