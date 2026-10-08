@@ -12,6 +12,10 @@ import {
 } from "next/server";
 
 import {
+  reconcilePagoTicDebitWebhook,
+} from "@/lib/payments/pagotic/reconcile-debit-webhook";
+
+import {
   createAdminClient,
 } from "@/lib/supabase/admin";
 
@@ -425,8 +429,10 @@ export async function POST(
     );
 
   if (
-    providerType !==
-      "adhesion" ||
+    ![
+      "adhesion",
+      "debit",
+    ].includes(providerType) ||
     !providerObjectId ||
     !providerStatus
   ) {
@@ -434,7 +440,7 @@ export async function POST(
       {
         received: false,
         error:
-          "La notificación no corresponde a una adhesión válida.",
+          "La notificación no corresponde a un evento válido de Pago TIC.",
       },
       {
         status: 400,
@@ -512,7 +518,10 @@ export async function POST(
         provider: "pagotic",
         event_key: eventKey,
         event_type:
-          "subscription.adhesion",
+          providerType ===
+            "debit"
+            ? "payment.debit"
+            : "subscription.adhesion",
         provider_object_id:
           providerObjectId,
         collector_id:
@@ -588,6 +597,93 @@ export async function POST(
           new Date().toISOString(),
       })
       .eq("id", eventId);
+  }
+
+  if (
+    providerType ===
+    "debit"
+  ) {
+    try {
+      const result =
+        await reconcilePagoTicDebitWebhook(
+          payload,
+          sanitizedPayload,
+        );
+
+      await updateEvent({
+        processing_status:
+          result.outcome,
+        error_message:
+          result.reason,
+        processed_at:
+          new Date().toISOString(),
+      });
+
+      revalidatePath(
+        "/panel/pagos",
+      );
+
+      revalidatePath(
+        "/panel/cuotas",
+      );
+
+      revalidatePath(
+        "/panel/pagos/lotes",
+      );
+
+      return NextResponse.json({
+        received: true,
+
+        processed:
+          result.outcome ===
+          "processed",
+
+        outcome:
+          result.outcome,
+
+        reason:
+          result.reason,
+
+        payment_id:
+          result.paymentId,
+
+        batch_id:
+          result.batchId,
+
+        status:
+          result.status,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible reconciliar el débito de Pago TIC.";
+
+      console.error(
+        "Error reconciliando débito Pago TIC:",
+        error,
+      );
+
+      await updateEvent({
+        processing_status:
+          "failed",
+        error_message:
+          message,
+        processed_at:
+          null,
+      });
+
+      return NextResponse.json(
+        {
+          received: false,
+          error:
+            "No fue posible procesar el débito.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
   }
 
   const metadata =
