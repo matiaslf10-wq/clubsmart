@@ -8,6 +8,7 @@ import {
 } from "next/navigation";
 
 import { requireCapability } from "@/lib/capabilities/require-capability";
+import { sendPagoTicBatchItemPayment } from "@/lib/payments/pagotic/send-batch-item-payment";
 import {
   createAdminClient,
 } from "@/lib/supabase/admin";
@@ -1029,6 +1030,288 @@ export async function markPaymentBatchReady(
   );
 }
 
+export async function sendPaymentBatch(
+  batchId: string,
+  year: number,
+  month: number,
+): Promise<void> {
+  const context =
+    await requireCapability(
+      "member.payments",
+    );
+
+  if (
+    !canManagePayments(
+      context.role,
+    )
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Tu usuario no tiene permisos para enviar lotes.",
+      batchId,
+    );
+  }
+
+  if (!isUuid(batchId)) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote indicado no es válido.",
+    );
+  }
+
+  const siteUrl =
+    process.env
+      .NEXT_PUBLIC_SITE_URL
+      ?.trim()
+      .replace(/\/$/, "");
+
+  const webhookSecret =
+    process.env
+      .PAGOTIC_WEBHOOK_SECRET
+      ?.trim();
+
+  if (!siteUrl) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Falta configurar NEXT_PUBLIC_SITE_URL.",
+      batchId,
+    );
+  }
+
+  if (!webhookSecret) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Falta configurar PAGOTIC_WEBHOOK_SECRET.",
+      batchId,
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: batch,
+    error: batchError,
+  } = await supabase
+    .from("payment_batches")
+    .select(`
+      id,
+      status,
+      provider,
+      ready_items
+    `)
+    .eq("id", batchId)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .maybeSingle();
+
+  if (
+    batchError ||
+    !batch
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote no existe o no pertenece a este club.",
+      batchId,
+    );
+  }
+
+  if (
+    batch.provider !==
+    "pagotic"
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Este lote no corresponde a Pago TIC.",
+      batchId,
+    );
+  }
+
+  if (
+    batch.status !==
+    "ready"
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "Solamente pueden enviarse lotes preparados.",
+      batchId,
+    );
+  }
+
+  if (
+    batch.ready_items <= 0
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote no contiene cuotas preparadas para enviar.",
+      batchId,
+    );
+  }
+
+  const {
+    data: claimedBatch,
+    error: claimError,
+  } = await supabase
+    .from("payment_batches")
+    .update({
+      status: "processing",
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", batch.id)
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .eq("status", "ready")
+    .select("id")
+    .maybeSingle();
+
+  if (
+    claimError ||
+    !claimedBatch
+  ) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      "El lote ya fue tomado por otro proceso o dejó de estar disponible.",
+      batchId,
+    );
+  }
+
+  const {
+    data: items,
+    error: itemsError,
+  } = await supabase
+    .from("payment_batch_items")
+    .select("id")
+    .eq(
+      "batch_id",
+      batch.id,
+    )
+    .eq(
+      "organization_id",
+      context.organizationId,
+    )
+    .eq(
+      "club_id",
+      context.clubId,
+    )
+    .eq("status", "ready")
+    .order(
+      "created_at",
+      {
+        ascending: true,
+      },
+    );
+
+  if (
+    itemsError ||
+    !items ||
+    items.length === 0
+  ) {
+    await supabase
+      .from("payment_batches")
+      .update({
+        status: "error",
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", batch.id)
+      .eq(
+        "organization_id",
+        context.organizationId,
+      )
+      .eq(
+        "club_id",
+        context.clubId,
+      );
+
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      itemsError
+        ? `No fue posible cargar los ítems del lote: ${itemsError.message}`
+        : "El lote ya no contiene ítems disponibles para enviar.",
+      batchId,
+    );
+  }
+
+  const notificationUrl =
+    `${siteUrl}/api/payments/pagotic/webhook` +
+    `?secret=${encodeURIComponent(
+      webhookSecret,
+    )}`;
+
+  let sentCount = 0;
+  let errorCount = 0;
+
+  for (const item of items) {
+    try {
+      await sendPagoTicBatchItemPayment(
+        item.id,
+        notificationUrl,
+      );
+
+      sentCount += 1;
+    } catch (error) {
+      errorCount += 1;
+
+      console.error(
+        `Error enviando ítem ${item.id} del lote ${batch.id}:`,
+        error,
+      );
+    }
+  }
+
+  revalidateBatchPages();
+
+  if (errorCount > 0) {
+    redirectWithMessage(
+      year,
+      month,
+      "error",
+      `El lote procesó ${sentCount} envío(s) sin error y ${errorCount} con error.`,
+      batchId,
+    );
+  }
+
+  redirectWithMessage(
+    year,
+    month,
+    "success",
+    `Se enviaron ${sentCount} débito(s) a Pago TIC.`,
+    batchId,
+  );
+}
 export async function cancelPaymentBatch(
   batchId: string,
   year: number,
