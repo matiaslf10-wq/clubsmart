@@ -585,6 +585,9 @@ export async function POST(
       processed_at:
         | string
         | null;
+      payment_id?:
+        | string
+        | null;
     },
   ) {
     if (!eventId) {
@@ -621,6 +624,8 @@ export async function POST(
           result.reason,
         processed_at:
           new Date().toISOString(),
+        payment_id:
+          result.paymentId,
       });
 
       revalidatePath(
