@@ -1,4 +1,21 @@
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+import type {
+  NextRequest,
+} from "next/server";
 
-export { POST } from "@/lib/payments/pagotic/webhook/route";
+import {
+  POST as handlePagoTicWebhook,
+} from "@/lib/payments/pagotic/webhook/route";
+
+export const dynamic =
+  "force-dynamic";
+
+export const runtime =
+  "nodejs";
+
+export async function POST(
+  request: NextRequest,
+) {
+  return handlePagoTicWebhook(
+    request,
+  );
+}
