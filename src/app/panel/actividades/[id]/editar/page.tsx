@@ -86,6 +86,7 @@ export default async function EditActivityPage({
       age_to,
       cover_image_url,
       contact_whatsapp,
+      payment_url,
       activity_schedules (
         day_of_week,
         start_time,
@@ -264,6 +265,11 @@ export default async function EditActivityPage({
 
             contactWhatsapp:
               activity.contact_whatsapp ??
+              "",
+
+
+            paymentUrl:
+              activity.payment_url ??
               "",
 
             schedules:
