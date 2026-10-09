@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
@@ -202,9 +202,12 @@ export default async function PaymentConfigurationPage({
 
   const debitConfigured = Boolean(configuration?.automatic_debit_enabled);
 
+  const technicalConnectorAvailable =
+    platformConfigured || connectionStatus === "active";
+
   const ready =
     connectionStatus === "active" &&
-    platformConfigured &&
+    technicalConnectorAvailable &&
     collectorConfigured &&
     monthlyConfigured &&
     debitConfigured;
@@ -227,7 +230,7 @@ export default async function PaymentConfigurationPage({
     {
       label: "Conector técnico disponible",
 
-      completed: platformConfigured,
+      completed: technicalConnectorAvailable,
     },
 
     {
@@ -576,7 +579,7 @@ export default async function PaymentConfigurationPage({
                   </span>
                 </label>
 
-                {!platformConfigured ? (
+                {!technicalConnectorAvailable ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                     El conector técnico de Pago TIC todavía no tiene
                     credenciales válidas en el servidor. El administrador puede
@@ -660,3 +663,4 @@ export default async function PaymentConfigurationPage({
     </div>
   );
 }
+
