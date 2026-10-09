@@ -52,6 +52,7 @@ type ActivityPayload = {
   ageFrom: number | null;
   ageTo: number | null;
   contactWhatsapp: string;
+  paymentUrl: string;
   schedules: ReturnType<
     typeof readSchedules
   >;
@@ -252,6 +253,13 @@ function readActivityPayload(
 
       contactWhatsapp,
 
+
+      paymentUrl:
+        readText(
+          formData,
+          "payment_url",
+        ),
+
       schedules,
     },
   };
@@ -431,6 +439,11 @@ export async function createActivity(
 
       contact_whatsapp:
         payload.contactWhatsapp ||
+        null,
+
+
+      payment_url:
+        payload.paymentUrl ||
         null,
 
       enrollment_open:
@@ -724,6 +737,11 @@ export async function updateActivity(
 
       contact_whatsapp:
         payload.contactWhatsapp ||
+        null,
+
+
+      payment_url:
+        payload.paymentUrl ||
         null,
 
       enrollment_open:
