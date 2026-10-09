@@ -5,6 +5,10 @@ import {
 
 import { reconcileMonthlyFee } from "@/lib/payments/reconcile-monthly-fee";
 
+import {
+  getMercadoPagoAccessToken,
+} from "@/lib/payments/mercado-pago/oauth";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type InternalPaymentStatus =
@@ -175,17 +179,12 @@ export function verifyMercadoPagoSignature({
 
 export async function getMercadoPagoPayment(
   providerPaymentId: string,
+  providerConfigurationId: string,
 ) {
   const accessToken =
-    process.env
-      .MERCADO_PAGO_ACCESS_TOKEN
-      ?.trim();
-
-  if (!accessToken) {
-    throw new Error(
-      "Falta MERCADO_PAGO_ACCESS_TOKEN.",
+    await getMercadoPagoAccessToken(
+      providerConfigurationId,
     );
-  }
 
   const response = await fetch(
     `https://api.mercadopago.com/v1/payments/${encodeURIComponent(
@@ -334,10 +333,12 @@ async function findInternalPayment(
 
 export async function reconcileMercadoPagoPayment(
   providerPaymentId: string,
+  providerConfigurationId: string,
 ) {
   const mercadoPagoPayment =
     await getMercadoPagoPayment(
       providerPaymentId,
+      providerConfigurationId,
     );
 
   const internalPayment =

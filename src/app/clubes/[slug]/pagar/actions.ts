@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import {
+  getMercadoPagoAccessToken,
+} from "@/lib/payments/mercado-pago/oauth";
+
 type PaymentProvider =
   | "mercado_pago"
   | "pagotic";
@@ -79,6 +83,7 @@ type ProviderConfiguration = {
   automatic_debit_enabled: boolean;
   default_for_monthly_fees: boolean;
   merchant_account_id: string | null;
+  secret_reference: string | null;
   public_settings:
     | Record<string, unknown>
     | null;
@@ -523,6 +528,7 @@ async function loadPaymentContext(
       automatic_debit_enabled,
       default_for_monthly_fees,
       merchant_account_id,
+      secret_reference,
       public_settings
     `)
     .eq(

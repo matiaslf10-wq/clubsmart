@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
+
 import {
   reconcileMercadoPagoPayment,
   verifyMercadoPagoSignature,
@@ -13,6 +15,7 @@ type MercadoPagoWebhookBody = {
   type?: string;
   action?: string;
   live_mode?: boolean;
+  user_id?: string | number;
   data?: {
     id?: string | number;
   };
@@ -194,9 +197,47 @@ export async function POST(
   }
 
   try {
+    const merchantAccountId =
+      body.user_id !== undefined
+        ? String(body.user_id)
+        : null;
+
+    if (!merchantAccountId) {
+      throw new Error(
+        "La notificaci?n de Mercado Pago no contiene user_id.",
+      );
+    }
+
+    const supabase =
+      createAdminClient();
+
+    const {
+      data: providerConfiguration,
+      error: providerError,
+    } = await supabase
+      .from("club_payment_providers")
+      .select("id")
+      .eq("provider", "mercado_pago")
+      .eq("merchant_account_id", merchantAccountId)
+      .eq("enabled", true)
+      .eq("connection_status", "active")
+      .maybeSingle();
+
+    if (
+      providerError ||
+      !providerConfiguration
+    ) {
+      throw new Error(
+        providerError
+          ? `No fue posible resolver la cuenta Mercado Pago: ${providerError.message}`
+          : "No existe una cuenta Mercado Pago activa para esta notificaci?n.",
+      );
+    }
+
     const result =
       await reconcileMercadoPagoPayment(
         dataId,
+        providerConfiguration.id,
       );
 
     return NextResponse.json(

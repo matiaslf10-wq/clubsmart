@@ -30,6 +30,7 @@ type Payment = {
   provider: string;
   provider_status: string | null;
   provider_payment_id: string | null;
+  provider_configuration_id: string | null;
   created_at: string;
   paid_at: string | null;
 };
@@ -257,6 +258,7 @@ export default async function PaymentResultPage({
           provider,
           provider_status,
           provider_payment_id,
+      provider_configuration_id,
           created_at,
           paid_at
         `)
@@ -291,10 +293,17 @@ export default async function PaymentResultPage({
     resultParams.payment_id
   ) {
     try {
-      const reconciliation =
-        await reconcileMercadoPagoPayment(
-          resultParams.payment_id,
-        );
+      if (!payment.provider_configuration_id) {
+      throw new Error(
+        "El pago no tiene proveedor Mercado Pago asociado.",
+      );
+    }
+
+    const reconciliation =
+      await reconcileMercadoPagoPayment(
+        resultParams.payment_id,
+        payment.provider_configuration_id,
+      );
 
       if (
         reconciliation.internalPaymentId !==

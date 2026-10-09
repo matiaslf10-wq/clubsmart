@@ -40,6 +40,17 @@ type PagoTicConfiguration = {
   last_connection_error: string | null;
 };
 
+
+type MercadoPagoConfiguration = {
+  id: string;
+  enabled: boolean;
+  merchant_account_id: string | null;
+  connection_status: ConnectionStatus;
+  connected_at: string | null;
+  last_connection_error: string | null;
+  secret_reference: string | null;
+};
+
 export const dynamic = "force-dynamic";
 
 function hasUsableEnvironmentValue(variableName: string) {
@@ -189,6 +200,47 @@ export default async function PaymentConfigurationPage({
   }
 
   const configuration = data as PagoTicConfiguration | null;
+
+  const {
+    data: mercadoPagoData,
+    error: mercadoPagoError,
+  } = await supabase
+    .from("club_payment_providers")
+    .select(`
+      id,
+      enabled,
+      merchant_account_id,
+      connection_status,
+      connected_at,
+      last_connection_error,
+      secret_reference
+    `)
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .eq("provider", "mercado_pago")
+    .maybeSingle();
+
+  if (mercadoPagoError) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-900">
+        <h1 className="text-2xl font-bold">
+          No fue posible cargar Mercado Pago
+        </h1>
+
+        <p className="mt-3">{mercadoPagoError.message}</p>
+      </div>
+    );
+  }
+
+  const mercadoPagoConfiguration =
+    mercadoPagoData as MercadoPagoConfiguration | null;
+
+  const mercadoPagoConnected =
+    mercadoPagoConfiguration?.enabled === true &&
+    mercadoPagoConfiguration?.connection_status === "active" &&
+    Boolean(mercadoPagoConfiguration?.merchant_account_id) &&
+    Boolean(mercadoPagoConfiguration?.secret_reference);
+
 
   const connectionStatus = configuration?.connection_status ?? "not_started";
 
