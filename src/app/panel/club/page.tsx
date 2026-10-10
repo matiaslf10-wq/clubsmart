@@ -39,6 +39,9 @@ export default async function ClubSettingsPage() {
         email,
         phone,
         whatsapp_phone,
+        transfer_alias,
+        transfer_cvu,
+        transfer_holder,
         address,
         city,
         province,
@@ -239,6 +242,12 @@ export default async function ClubSettingsPage() {
             phone: club.phone ?? "",
             whatsappPhone:
               club.whatsapp_phone ?? "",
+            transferAlias:
+              club.transfer_alias ?? "",
+            transferCvu:
+              club.transfer_cvu ?? "",
+            transferHolder:
+              club.transfer_holder ?? "",
             address: club.address ?? "",
             city: club.city ?? "",
             province: club.province ?? "",

@@ -133,6 +133,21 @@ export async function updateClub(
     readText(formData, "whatsapp_phone"),
   );
 
+  const transferAlias = readText(
+    formData,
+    "transfer_alias",
+  );
+
+  const transferCvu = readText(
+    formData,
+    "transfer_cvu",
+  );
+
+  const transferHolder = readText(
+    formData,
+    "transfer_holder",
+  );
+
   const address = readText(
     formData,
     "address",
@@ -209,6 +224,12 @@ export async function updateClub(
       phone: phone || null,
       whatsapp_phone:
         whatsappPhone || null,
+      transfer_alias:
+        transferAlias || null,
+      transfer_cvu:
+        transferCvu || null,
+      transfer_holder:
+        transferHolder || null,
       address: address || null,
       city: city || null,
       province: province || null,
