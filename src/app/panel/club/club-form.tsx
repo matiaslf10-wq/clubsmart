@@ -15,6 +15,9 @@ type ClubFormProps = {
     email: string;
     phone: string;
     whatsappPhone: string;
+    transferAlias: string;
+    transferCvu: string;
+    transferHolder: string;
     address: string;
     city: string;
     province: string;
@@ -190,7 +193,71 @@ export function ClubForm({
       </section>
 
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">
+          Cobros por transferencia
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Configur? la cuenta donde el club recibe transferencias.
+          Estos datos se mostrar?n al socio al pagar una cuota.
+        </p>
+
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="transfer_alias"
+              className="text-sm font-medium text-slate-700"
+            >
+              Alias
+            </label>
+
+            <input
+              id="transfer_alias"
+              name="transfer_alias"
+              defaultValue={club.transferAlias}
+              className={inputClassName}
+              placeholder="club.smart.mp"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="transfer_cvu"
+              className="text-sm font-medium text-slate-700"
+            >
+              CVU / CBU
+            </label>
+
+            <input
+              id="transfer_cvu"
+              name="transfer_cvu"
+              defaultValue={club.transferCvu}
+              className={inputClassName}
+              placeholder="0000000000000000000000"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label
+              htmlFor="transfer_holder"
+              className="text-sm font-medium text-slate-700"
+            >
+              Titular de la cuenta
+            </label>
+
+            <input
+              id="transfer_holder"
+              name="transfer_holder"
+              defaultValue={club.transferHolder}
+              className={inputClassName}
+              placeholder="Club Social y Deportivo..."
+            />
+          </div>
+        </div>
+      </section>
+
+<section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">
           Ubicación
         </h2>
