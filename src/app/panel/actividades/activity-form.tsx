@@ -367,27 +367,11 @@ export function ActivityForm({
               placeholder="Objetivos, modalidad, requisitos y otra información relevante"
             />
           </div>
-          <div>
-            <label
-              htmlFor="payment_url"
-              className="text-sm font-medium text-slate-700"
-            >
-              Link de pago Mercado Pago
-            </label>
-
-            <input
-              id="payment_url"
-              name="payment_url"
-              type="url"
-              defaultValue={initialValues.paymentUrl}
-              className={inputClassName}
-              placeholder="https://link.mercadopago.com.ar/..."
-            />
-
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Peg? el link de pago generado desde la cuenta Mercado Pago del club.
-            </p>
-          </div>
+          <input
+            type="hidden"
+            name="payment_url"
+            value={initialValues.paymentUrl}
+          />
 
 
 
