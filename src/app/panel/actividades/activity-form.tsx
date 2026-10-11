@@ -159,6 +159,13 @@ export function ActivityForm({
   );
 
   const [
+    categoryValue,
+    setCategoryValue,
+  ] = useState(
+    initialValues.category,
+  );
+
+  const [
     ageMaximumIsFree,
     setAgeMaximumIsFree,
   ] = useState(
@@ -395,9 +402,20 @@ export function ActivityForm({
             <input
               id="category"
               name="category"
-              defaultValue={
-                initialValues.category
-              }
+              value={categoryValue}
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                setCategoryValue(
+                  value.length > 0
+                    ? value
+                        .charAt(0)
+                        .toLocaleUpperCase("es") +
+                        value.slice(1)
+                    : value,
+                );
+              }}
               className={
                 inputClassName
               }
