@@ -79,6 +79,19 @@ function isValidWhatsApp(
   );
 }
 
+function normalizeCategory(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return (
+    trimmed.charAt(0).toLocaleUpperCase("es") +
+    trimmed.slice(1)
+  );
+}
+
 function readActivityPayload(
   formData: FormData,
 ):
@@ -240,9 +253,11 @@ function readActivityPayload(
         ),
 
       category:
-        readText(
-          formData,
-          "category",
+        normalizeCategory(
+          readText(
+            formData,
+            "category",
+          ),
         ),
 
       level,
