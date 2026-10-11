@@ -611,7 +611,7 @@ export async function createActivity(
   );
 
   redirect(
-    "/panel/actividades",
+    `/panel/actividades/${activity.id}/editar`,
   );
 }
 
