@@ -9,6 +9,10 @@ import {
 } from "@/app/panel/notificaciones/actions";
 
 import {
+  ActivitySearchSelect,
+} from "@/app/panel/notificaciones/nueva/activity-search-select";
+
+import {
   getAdminContext,
 } from "@/lib/auth/admin-context";
 
@@ -299,34 +303,14 @@ export default async function NewNotificationPage({
                 Actividad
               </span>
 
-              <select
-                name="activity_id"
-                defaultValue=""
-                className="input mt-2"
-              >
-                <option value="">
-                  Seleccionar actividad
-                </option>
-
-                {activities.map(
-                  (
-                    activity,
-                  ) => (
-                    <option
-                      key={
-                        activity.id
-                      }
-                      value={
-                        activity.id
-                      }
-                    >
-                      {
-                        activity.name
-                      }
-                    </option>
-                  ),
+              <ActivitySearchSelect
+                activities={activities.map(
+                  (activity) => ({
+                    id: activity.id,
+                    name: activity.name,
+                  }),
                 )}
-              </select>
+              />
 
               <span className="mt-2 block text-xs text-slate-500">
                 Completalo solamente si

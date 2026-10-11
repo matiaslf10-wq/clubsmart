@@ -12,6 +12,10 @@ import {
 } from "@/app/panel/reservas/reservation-form";
 
 import {
+  SpaceSearchSelect,
+} from "@/app/panel/reservas/nueva/space-search-select";
+
+import {
   getAdminContext,
 } from "@/lib/auth/admin-context";
 
@@ -75,6 +79,37 @@ function formatMoney(
       maximumFractionDigits: 2,
     },
   ).format(value);
+}
+
+function formatAvailabilityDate(
+  value: string,
+) {
+  const [
+    year,
+    month,
+    day,
+  ] = value
+    .split("-")
+    .map(Number);
+
+  return new Intl.DateTimeFormat(
+    "es-AR",
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    },
+  ).format(
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        12,
+      ),
+    ),
+  );
 }
 
 export default async function NewReservationPage({
@@ -208,10 +243,10 @@ export default async function NewReservationPage({
       -1,
     );
 
-  const nextDate =
+  const availabilityPreviewEndDate =
     addDays(
       selectedDate,
-      1,
+      60,
     );
 
   const [
@@ -275,7 +310,7 @@ export default async function NewReservationPage({
       )
       .lte(
         "reservation_date",
-        nextDate,
+        availabilityPreviewEndDate,
       )
       .in(
         "status",
@@ -341,6 +376,18 @@ export default async function NewReservationPage({
     );
   }
 
+  const availabilityRows =
+    (
+      availabilityResult.data ??
+      []
+    ) as AvailabilityRow[];
+
+  const reservationRows =
+    (
+      reservationsResult.data ??
+      []
+    ) as ExistingReservation[];
+
   const slots =
     generateReservationSlots({
       selectedDate,
@@ -352,17 +399,59 @@ export default async function NewReservationPage({
         selectedSpace.slot_interval_minutes,
 
       availability:
-        (
-          availabilityResult.data ??
-          []
-        ) as AvailabilityRow[],
+        availabilityRows,
 
       reservations:
-        (
-          reservationsResult.data ??
-          []
-        ) as ExistingReservation[],
+        reservationRows,
     });
+
+  const nextAvailableDays: Array<{
+    date: string;
+    slots: ReturnType<
+      typeof generateReservationSlots
+    >;
+  }> = [];
+
+  for (
+    let offset = 0;
+    offset <= 60 &&
+    nextAvailableDays.length < 7;
+    offset += 1
+  ) {
+    const date =
+      addDays(
+        selectedDate,
+        offset,
+      );
+
+    const dateSlots =
+      generateReservationSlots({
+        selectedDate:
+          date,
+
+        durationMinutes:
+          selectedSpace.minimum_reservation_minutes,
+
+        intervalMinutes:
+          selectedSpace.slot_interval_minutes,
+
+        availability:
+          availabilityRows,
+
+        reservations:
+          reservationRows,
+      });
+
+    if (
+      dateSlots.length > 0
+    ) {
+      nextAvailableDays.push({
+        date,
+        slots:
+          dateSlots,
+      });
+    }
+  }
 
   const price =
     Number(
@@ -406,28 +495,17 @@ export default async function NewReservationPage({
               Espacio
             </span>
 
-            <select
-              name="espacio"
-              defaultValue={
+            <SpaceSearchSelect
+              spaces={spaces.map(
+                (space) => ({
+                  id: space.id,
+                  name: space.name,
+                }),
+              )}
+              initialSpaceId={
                 selectedSpace.id
               }
-              className="input mt-2"
-            >
-              {spaces.map(
-                (space) => (
-                  <option
-                    key={
-                      space.id
-                    }
-                    value={
-                      space.id
-                    }
-                  >
-                    {space.name}
-                  </option>
-                ),
-              )}
-            </select>
+            />
           </label>
 
           <label>
@@ -493,6 +571,68 @@ export default async function NewReservationPage({
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">
+            {"Pr\u00F3ximos turnos disponibles"}
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-600">
+            {"Se muestran los pr\u00F3ximos d\u00EDas que tienen turnos libres."}
+          </p>
+        </div>
+
+        {nextAvailableDays.length === 0 ? (
+          <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+            {"No encontramos pr\u00F3ximos turnos disponibles."}
+          </p>
+        ) : (
+          <div className="mt-5 space-y-5">
+            {nextAvailableDays.map(
+              (day) => (
+                <div
+                  key={day.date}
+                  className="border-b border-slate-100 pb-5 last:border-b-0 last:pb-0"
+                >
+                  <h3 className="font-semibold text-slate-900">
+                    {formatAvailabilityDate(
+                      day.date,
+                    )}
+                  </h3>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {day.slots.map(
+                      (slot) => (
+                        <Link
+                          key={
+                            slot.key
+                          }
+                          href={{
+                            pathname:
+                              "/panel/reservas/nueva",
+                            query: {
+                              espacio:
+                                selectedSpace.id,
+                              fecha:
+                                day.date,
+                            },
+                          }}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-300 hover:bg-blue-100"
+                        >
+                          {
+                            slot.label
+                          }
+                        </Link>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        )}
       </section>
 
       <div className="mt-6">
