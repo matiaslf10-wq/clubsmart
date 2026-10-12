@@ -7,6 +7,7 @@ import {
 
 import {
   cancelManualReservationPayment,
+  confirmReportedReservationPayment,
   recordManualReservationPayment,
 } from "@/app/panel/reservas/actions";
 
@@ -74,6 +75,11 @@ type Payment = {
 
   notes:
     | string
+    | null;
+
+
+  metadata:
+    | Record<string, unknown>
     | null;
 
   created_at: string;
@@ -282,6 +288,7 @@ export default async function ReservationDetailPage({
         provider_status,
         paid_at,
         notes,
+        metadata,
         created_at
       `)
       .eq(
@@ -577,6 +584,46 @@ export default async function ReservationDetailPage({
                         }
                       </p>
                     ) : null}
+                    {canRecordPayments(
+                      context.role,
+                      context.financialPermissions,
+                    ) &&
+                    payment.source === "manual" &&
+                    payment.status === "pending" &&
+                    payment.payment_method === "transfer" &&
+                    payment.metadata?.reported_by_member_app === true ? (
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="font-semibold text-amber-950">
+                          {payment.metadata?.payment_scope === "total"
+                            ? "Pago total informado por el socio"
+                            : "Se\u00f1a informada por el socio"}
+                        </p>
+
+                        <p className="mt-1 text-sm text-amber-800">
+                          {"Pendiente de verificaci\u00f3n. Confirm\u00e1 solamente despu\u00e9s de comprobar la transferencia."}
+                        </p>
+
+                        <form
+                          action={confirmReportedReservationPayment.bind(
+                            null,
+                            payment.id,
+                            reservation.id,
+                          )}
+                          className="mt-3"
+                        >
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+                          >
+                            {payment.metadata?.payment_scope === "total"
+                              ? "Confirmar pago total"
+                              : "Confirmar se\u00f1a"}
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+
+
 
                     {canRecordPayments(
   context.role,

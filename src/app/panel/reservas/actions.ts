@@ -1568,6 +1568,150 @@ if (
   );
 }
 
+export async function confirmReportedReservationPayment(
+  paymentId: string,
+  reservationId: string,
+  _formData: FormData,
+): Promise<void> {
+  const context =
+    await requireCapability("member.reservations");
+
+  if (
+    !canManageReservations(
+      context.role,
+    ) ||
+    !canRecordPayments(
+      context.role,
+      context.financialPermissions,
+    )
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "Tu usuario no tiene permisos para confirmar pagos.",
+    );
+  }
+
+  if (
+    !isUuid(paymentId) ||
+    !isUuid(reservationId)
+  ) {
+    redirect("/panel/reservas");
+  }
+
+  const supabase =
+    createAdminClient();
+
+  const {
+    data: payment,
+    error: paymentError,
+  } = await supabase
+    .from("reservation_payments")
+    .select(`
+      id,
+      reservation_id,
+      source,
+      status,
+      amount,
+      payment_method,
+      metadata
+    `)
+    .eq("id", paymentId)
+    .eq("reservation_id", reservationId)
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .maybeSingle();
+
+  if (
+    paymentError ||
+    !payment
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "El pago informado no existe.",
+    );
+  }
+
+  const metadata =
+    payment.metadata &&
+    typeof payment.metadata === "object" &&
+    !Array.isArray(payment.metadata)
+      ? payment.metadata as Record<string, unknown>
+      : {};
+
+  const paymentScope =
+    metadata.payment_scope === "total"
+      ? "total"
+      : "deposit";
+
+  if (
+    payment.source !== "manual" ||
+    payment.status !== "pending" ||
+    payment.payment_method !== "transfer" ||
+    metadata.reported_by_member_app !== true
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "Este pago no corresponde a una se\u00f1a informada desde la app.",
+    );
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const {
+    data: updatedPayment,
+    error: updateError,
+  } = await supabase
+    .from("reservation_payments")
+    .update({
+      status: "approved",
+      paid_at: now,
+      updated_at: now,
+    })
+    .eq("id", paymentId)
+    .eq("reservation_id", reservationId)
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+
+  if (
+    updateError ||
+    !updatedPayment
+  ) {
+    redirectToReservation(
+      reservationId,
+      "error",
+      "No fue posible confirmar la se\u00f1a.",
+    );
+  }
+
+  await writeAuditLog(
+    context,
+    {
+      action: "reservation_deposit.confirmed",
+      entityType: "payment",
+      entityId: paymentId,
+      entityLabel: `Se\u00f1a de reserva ${reservationId}`,
+      summary: `Confirm\u00f3 una se\u00f1a informada desde la app por ${Number(
+        payment.amount,
+      ).toLocaleString("es-AR")}.`,
+    },
+  );
+
+  redirectToReservation(
+    reservationId,
+    "success",
+    paymentScope === "total"
+      ? "El pago total fue confirmado correctamente."
+      : "La se\u00f1a fue confirmada correctamente.",
+  );
+}
+
 export async function cancelManualReservationPayment(
   paymentId: string,
   reservationId: string,
