@@ -25,6 +25,14 @@ function formatRole(role: string) {
   return role;
 }
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 type SummaryCardProps = {
   title: string;
   value: number;
@@ -138,13 +146,53 @@ export default async function PanelPage() {
 
   const supabase = createAdminClient();
 
-  const [
+  const now = new Date();
+
+  const argentinaDateParts =
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(now);
+
+  const currentYear = Number(
+    argentinaDateParts.find(
+      (part) => part.type === "year",
+    )?.value,
+  );
+
+  const currentMonth = Number(
+    argentinaDateParts.find(
+      (part) => part.type === "month",
+    )?.value,
+  );
+
+  const nextMonthDate =
+    currentMonth === 12
+      ? { year: currentYear + 1, month: 1 }
+      : { year: currentYear, month: currentMonth + 1 };
+
+  const monthStart =
+    `${currentYear}-${String(currentMonth).padStart(2, "0")}-01T00:00:00-03:00`;
+
+  const nextMonthStart =
+    `${nextMonthDate.year}-${String(nextMonthDate.month).padStart(2, "0")}-01T00:00:00-03:00`;
+
+  const monthLabel =
+    new Intl.DateTimeFormat("es-AR", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      month: "long",
+    }).format(now);
+
+const [
     activitiesResult,
     membersResult,
     feesResult,
     paymentsResult,
     providersResult,
     clubResult,
+    monthlyFeeRevenueResult,
+    reservationRevenueResult,
   ] = await Promise.all([
     supabase
       .from("activities")
@@ -237,6 +285,25 @@ export default async function PanelPage() {
         context.organizationId,
       )
       .maybeSingle(),
+
+    supabase
+      .from("payments")
+      .select("amount, paid_at")
+      .eq("organization_id", context.organizationId)
+      .eq("club_id", context.clubId)
+      .eq("status", "approved")
+      .eq("payment_kind", "monthly_fee")
+      .gte("paid_at", monthStart)
+      .lt("paid_at", nextMonthStart),
+
+    supabase
+      .from("reservation_payments")
+      .select("amount, paid_at")
+      .eq("organization_id", context.organizationId)
+      .eq("club_id", context.clubId)
+      .eq("status", "approved")
+      .gte("paid_at", monthStart)
+      .lt("paid_at", nextMonthStart),
   ]);
 
   const summaryErrors = [
@@ -246,6 +313,8 @@ export default async function PanelPage() {
     paymentsResult.error,
     providersResult.error,
     clubResult.error,
+    monthlyFeeRevenueResult.error,
+    reservationRevenueResult.error,
   ].filter(
     (
       error,
@@ -269,7 +338,25 @@ export default async function PanelPage() {
   const enabledProviders =
     providersResult.count ?? 0;
 
-  const club =
+  const monthlyFeeRevenue =
+    (monthlyFeeRevenueResult.data ?? []).reduce(
+      (total, payment) =>
+        total + Number(payment.amount ?? 0),
+      0,
+    );
+
+  const reservationRevenue =
+    (reservationRevenueResult.data ?? []).reduce(
+      (total, payment) =>
+        total + Number(payment.amount ?? 0),
+      0,
+    );
+
+  const totalMonthlyRevenue =
+    monthlyFeeRevenue +
+    reservationRevenue;
+
+const club =
     clubResult.data;
 
   /*
@@ -484,6 +571,36 @@ export default async function PanelPage() {
           </p>
         </div>
 
+        <article className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-700">
+                Recaudación de {monthLabel}
+              </p>
+
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {formatCurrency(totalMonthlyRevenue)}
+              </p>
+
+              <p className="mt-3 text-sm text-slate-600">
+                Pagos confirmados durante el mes.
+              </p>
+            </div>
+
+            <div className="grid gap-2 text-sm sm:text-right">
+              <p className="text-slate-700">
+                <span className="font-semibold">Cuotas</span>{" "}
+                {formatCurrency(monthlyFeeRevenue)}
+              </p>
+
+              <p className="text-slate-700">
+                <span className="font-semibold">Reservas</span>{" "}
+                {formatCurrency(reservationRevenue)}
+              </p>
+            </div>
+          </div>
+        </article>
+
         <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             title="Actividades activas"
@@ -519,7 +636,7 @@ export default async function PanelPage() {
         </div>
       </section>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <section className="mt-8">
         <article className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">
             Acciones frecuentes
@@ -570,50 +687,7 @@ export default async function PanelPage() {
                 medios de contacto.
               </p>
             </Link>
-
-            {canManagePayments ? (
-              <Link
-                href="/panel/pagos/configuracion"
-                className="rounded-xl border border-slate-200 p-5 transition hover:border-blue-300 hover:bg-blue-50"
-              >
-                <p className="font-semibold text-slate-900">
-                  Configurar pagos
-                </p>
-
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Configurá los medios de cobro
-                  disponibles para este club.
-                </p>
-              </Link>
-            ) : null}
           </div>
-        </article>
-
-        <article className="rounded-2xl border border-blue-200 bg-blue-50 p-7">
-          <p className="text-sm font-semibold uppercase tracking-wider text-blue-700">
-            Proveedores de pago
-          </p>
-
-          <p className="mt-4 text-4xl font-bold text-blue-950">
-            {enabledProviders}
-          </p>
-
-          <p className="mt-3 text-sm leading-6 text-blue-900">
-            {enabledProviders === 0
-              ? "Todavía no hay proveedores habilitados para este club."
-              : enabledProviders === 1
-                ? "Hay un proveedor de pagos habilitado."
-                : `Hay ${enabledProviders} proveedores de pagos habilitados.`}
-          </p>
-
-          {canManagePayments ? (
-            <Link
-              href="/panel/pagos/configuracion"
-              className="mt-6 inline-flex rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800"
-            >
-              Revisar configuración
-            </Link>
-          ) : null}
         </article>
       </section>
     </div>

@@ -194,39 +194,12 @@ export default async function PanelLayout({
                 </Link>
               ) : null}
 
-              {canManagePayments ? (
-                <Link
-                  href="/panel/pagos/adhesiones"
-                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-                >
-                  Adhesiones
-                </Link>
-              ) : null}
-
-              {canManagePayments ? (
-                <Link
-                  href="/panel/pagos/lotes"
-                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-                >
-                  Lotes
-                </Link>
-              ) : null}
-
               {showPayments ? (
                 <Link
                   href="/panel/pagos"
                   className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
                 >
                   Pagos
-                </Link>
-              ) : null}
-
-              {canManagePayments ? (
-                <Link
-                  href="/panel/pagos/configuracion"
-                  className="text-sm font-medium text-slate-600 transition hover:text-blue-700"
-                >
-                  Configuración de pagos
                 </Link>
               ) : null}
 
