@@ -260,11 +260,8 @@ export default async function NotificationsPage({
         notification.id,
     );
 
-  const recipientCounts =
-    new Map<
-      string,
-      number
-    >();
+  const recipientsByNotification =
+    new Map<string, string[]>();
 
   if (
     notificationIds.length >
@@ -280,7 +277,8 @@ export default async function NotificationsPage({
         "club_notification_recipients",
       )
       .select(`
-        notification_id
+        notification_id,
+        recipient_name
       `)
       .in(
         "notification_id",
@@ -299,13 +297,19 @@ export default async function NotificationsPage({
       const recipient of
         recipientRows ?? []
     ) {
-      recipientCounts.set(
+      const currentRecipients =
+        recipientsByNotification.get(
+          recipient.notification_id,
+        ) ?? [];
+
+      currentRecipients.push(
+        recipient.recipient_name?.trim() ||
+          "Persona sin nombre",
+      );
+
+      recipientsByNotification.set(
         recipient.notification_id,
-        (
-          recipientCounts.get(
-            recipient.notification_id,
-          ) ?? 0
-        ) + 1,
+        currentRecipients,
       );
     }
   }
@@ -429,10 +433,13 @@ export default async function NotificationsPage({
             (
               notification,
             ) => {
-              const recipientCount =
-                recipientCounts.get(
+              const notificationRecipients =
+                recipientsByNotification.get(
                   notification.id,
-                ) ?? 0;
+                ) ?? [];
+
+              const recipientCount =
+                notificationRecipients.length;
 
               const reservation =
                 getSingleRelation(
@@ -459,13 +466,39 @@ export default async function NotificationsPage({
                           )}
                         </span>
 
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {recipientCount}{" "}
-                          {recipientCount ===
-                          1
-                            ? "destinatario"
-                            : "destinatarios"}
-                        </span>
+                        <details className="relative">
+                          <summary className="cursor-pointer list-none rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">
+                            {recipientCount}{" "}
+                            {recipientCount === 1
+                              ? "destinatario"
+                              : "destinatarios"}
+                          </summary>
+
+                          <div className="absolute left-0 z-20 mt-2 max-h-72 min-w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Personas destinatarias
+                            </p>
+
+                            {notificationRecipients.length > 0 ? (
+                              <ul className="space-y-2">
+                                {notificationRecipients.map(
+                                  (recipientName, index) => (
+                                    <li
+                                      key={`${notification.id}-${index}`}
+                                      className="text-sm text-slate-700"
+                                    >
+                                      {recipientName}
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-slate-500">
+                                No hay destinatarios registrados.
+                              </p>
+                            )}
+                          </div>
+                        </details>
 
                         {notification.status ===
                         "published" ? (

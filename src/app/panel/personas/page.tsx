@@ -39,6 +39,19 @@ function sanitizeSearch(value: string) {
     .trim();
 }
 
+function getMemberInitials(
+  firstName: string,
+  lastName: string,
+) {
+  const firstInitial =
+    firstName.trim().charAt(0).toUpperCase();
+
+  const lastInitial =
+    lastName.trim().charAt(0).toUpperCase();
+
+  return `${firstInitial}${lastInitial}` || "?";
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function MembersPage({
@@ -129,7 +142,39 @@ export default async function MembersPage({
 
   const members = data ?? [];
 
-  const activeCount = members.filter(
+  const photoUrlByMemberId =
+    new Map<string, string>();
+
+  if (members.length > 0) {
+    const photoPaths = members.map(
+      (member) => `${member.id}/profile`,
+    );
+
+    const { data: signedPhotos } =
+      await supabase.storage
+        .from("member-photos")
+        .createSignedUrls(
+          photoPaths,
+          3600,
+        );
+
+    for (const photo of signedPhotos ?? []) {
+      const memberId =
+        photo.path?.split("/")[0];
+
+      if (
+        memberId &&
+        photo.signedUrl
+      ) {
+        photoUrlByMemberId.set(
+          memberId,
+          photo.signedUrl,
+        );
+      }
+    }
+  }
+
+const activeCount = members.filter(
     (member) => member.active,
   ).length;
 
@@ -341,23 +386,48 @@ export default async function MembersPage({
               const memberName =
                 `${member.first_name} ${member.last_name}`;
 
-              return (
+              const memberPhotoUrl =
+                photoUrlByMemberId.get(
+                  member.id,
+                ) ?? null;
+
+              const memberInitials =
+                getMemberInitials(
+                  member.first_name,
+                  member.last_name,
+                );
+
+return (
                 <article
                   key={member.id}
                   className="grid gap-4 px-6 py-5 lg:grid-cols-[1.4fr_0.8fr_1.6fr_0.7fr_auto] lg:items-center"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {memberName}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                      {memberPhotoUrl ? (
+                        <img
+                          src={memberPhotoUrl}
+                          alt={memberName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{memberInitials}</span>
+                      )}
+                    </div>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      {member.guardian_name
-                        ? `Responsable: ${member.guardian_name}`
-                        : member.email ||
-                          member.phone ||
-                          "Sin contacto cargado"}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900">
+                        {memberName}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        {member.guardian_name
+                          ? `Responsable: ${member.guardian_name}`
+                          : member.email ||
+                            member.phone ||
+                            "Sin contacto cargado"}
+                      </p>
+                    </div>
                   </div>
 
                   <div>
