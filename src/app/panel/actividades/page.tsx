@@ -284,6 +284,13 @@ export default async function ActivitiesPage() {
     Tarifas
   </Link>
 
+  <Link
+    href={`/panel/actividades/${activity.id}/inscriptos`}
+    className="inline-flex justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+  >
+    Inscriptos
+  </Link>
+
   <DeleteActivityButton
     activityId={activity.id}
     activityName={activity.name}
