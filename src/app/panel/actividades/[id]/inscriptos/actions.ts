@@ -143,6 +143,66 @@ export async function deactivateEnrollment(
   );
 }
 
+
+export async function reactivateMemberFromEnrollment(
+  memberId: string,
+  activityId: string,
+): Promise<void> {
+  const context = await requireCapability("club.activities");
+
+  if (!canManageActivities(context.role)) {
+    throw new Error(
+      "Tu usuario no tiene permisos para reactivar personas.",
+    );
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: member, error } = await supabase
+    .from("members")
+    .update({
+      active: true,
+      inactive_at: null,
+      inactive_reason: null,
+    })
+    .eq("id", memberId)
+    .eq("organization_id", context.organizationId)
+    .eq("club_id", context.clubId)
+    .select("id, first_name, last_name")
+    .maybeSingle();
+
+  if (error || !member) {
+    throw new Error(
+      `No fue posible reactivar a la persona: ${
+        error?.message ??
+        "La persona no existe o no pertenece al club."
+      }`,
+    );
+  }
+
+  await writeAuditLog(context, {
+    action: "member.reactivated",
+    entityType: "member",
+    entityId: member.id,
+    entityLabel: `${member.first_name} ${member.last_name}`,
+    summary:
+      `Reactiv? a "${member.first_name} ${member.last_name}" desde la actividad.`,
+    metadata: {
+      source: "activity_enrollments",
+      activity_id: activityId,
+    },
+  });
+
+  revalidatePath("/panel");
+  revalidatePath("/panel/personas");
+  revalidatePath(
+    `/panel/personas/${member.id}/editar`,
+  );
+  revalidatePath(
+    `/panel/actividades/${activityId}/inscriptos`,
+  );
+}
+
 export async function reactivateEnrollment(
   relationId: string,
   activityId: string,

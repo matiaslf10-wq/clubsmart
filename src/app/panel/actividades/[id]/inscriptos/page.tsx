@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   deactivateEnrollment,
   reactivateEnrollment,
+  reactivateMemberFromEnrollment,
 } from "@/app/panel/actividades/[id]/inscriptos/actions";
 
 import { getAdminContext } from "@/lib/auth/admin-context";
@@ -346,6 +347,23 @@ export default async function ActivityEnrollmentsPage({
                             className="inline-flex justify-center rounded-lg border border-green-200 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                           >
                             Reactivar
+                          </button>
+                        </form>
+                      ) : null}
+
+                      {canManage && !member.active ? (
+                        <form
+                          action={reactivateMemberFromEnrollment.bind(
+                            null,
+                            member.id,
+                            id,
+                          )}
+                        >
+                          <button
+                            type="submit"
+                            className="inline-flex justify-center rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                          >
+                            Reactivar persona
                           </button>
                         </form>
                       ) : null}
