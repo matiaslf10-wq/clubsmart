@@ -245,38 +245,61 @@ export default function HomePage() {
             />
           </div>
 
-          <div className="mt-10 grid gap-6 sm:grid-cols-3">
+                    <div className="mt-10 grid gap-6 sm:grid-cols-3">
             {[
               {
-                image: "/demo/demo-app-actividades.jpg",
                 title: "Actividades",
-                description: "El socio consulta sus actividades y descubre nuevas propuestas.",
-                position: "50% 34%",
+                description:
+                  "El socio consulta sus actividades y descubre nuevas propuestas.",
+                detail: "Horarios ? profesores ? inscripci?n",
+                symbol: "A",
               },
               {
-                image: "/demo/demo-app-reservas.jpg",
                 title: "Reservas",
-                description: "Disponibilidad de espacios, horarios y reservas desde el celular.",
-                position: "50% 38%",
+                description:
+                  "Disponibilidad de espacios, horarios y reservas desde el celular.",
+                detail: "Canchas ? turnos ? se?as",
+                symbol: "R",
               },
               {
-                image: "/demo/demo-app-pagos.jpg",
                 title: "Pagos",
-                description: "Cuotas, vencimientos y seguimiento de pagos en un solo lugar.",
-                position: "50% 38%",
+                description:
+                  "Cuotas, vencimientos y seguimiento de pagos en un solo lugar.",
+                detail: "Cuotas ? transferencias ? estado",
+                symbol: "P",
               },
             ].map((item) => (
               <article
                 key={item.title}
                 className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
               >
-                <div className="h-[410px] overflow-hidden bg-slate-100">
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="h-[125%] w-full object-cover"
-                    style={{ objectPosition: item.position }}
-                  />
+                <div className="flex h-[300px] items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-white p-8">
+                  <div className="w-full max-w-[240px] rounded-[28px] border border-slate-200 bg-white p-5 shadow-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 font-bold text-white">
+                        {item.symbol}
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-slate-950">
+                          {item.title}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          ClubSmart
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+                      <div className="h-2 w-3/4 rounded-full bg-slate-200" />
+                      <div className="mt-3 h-2 w-full rounded-full bg-slate-200" />
+                      <div className="mt-3 h-2 w-2/3 rounded-full bg-slate-200" />
+                    </div>
+
+                    <p className="mt-5 text-xs font-semibold text-blue-700">
+                      {item.detail}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="p-5">
@@ -292,6 +315,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+
 
       <section id="funcionalidades" className="bg-slate-50 py-24">
         <div className="mx-auto max-w-7xl px-6">
