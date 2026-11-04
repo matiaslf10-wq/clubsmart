@@ -38,9 +38,9 @@ export default async function LoginPage() {
             <Image
               src="/logorendersmartok.png"
               alt="RenderSmart"
-              width={180}
-              height={60}
-              className="h-12 w-auto object-contain"
+              width={280}
+              height={110}
+              className="mx-auto h-24 w-auto object-contain sm:h-28"
               priority
             />
 
