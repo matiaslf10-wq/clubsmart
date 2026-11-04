@@ -1,3 +1,5 @@
+import BrandWordmark from "@/components/BrandWordmark";
+import Image from "next/image";
 import Link from "next/link";
 
 const demoClubSlug = "club-smart";
@@ -97,12 +99,17 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white">
-              C
-            </div>
+            <Image
+              src="/logorendersmartok.png"
+              alt="RenderSmart"
+              width={48}
+              height={48}
+              className="h-12 w-12 shrink-0 object-contain"
+              priority
+            />
 
             <div>
-              <p className="font-bold leading-none">ClubSmart</p>
+              <p className="leading-none"><BrandWordmark /></p>
               <p className="mt-1 text-xs text-slate-500">
                 Tecnología para clubes
               </p>
@@ -422,7 +429,7 @@ export default function HomePage() {
 <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-9 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-slate-800">ClubSmart</p>
+            <p className="text-slate-800"><BrandWordmark size={18}/></p>
             <p className="mt-1">Tecnología para clubes.</p>
           </div>
 

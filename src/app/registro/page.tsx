@@ -38,11 +38,11 @@ export default async function RegisterPage({
       <main className="min-h-screen bg-slate-50 px-6 py-12">
         <div className="mx-auto max-w-xl">
           <Link
-            href="/"
-            className="text-xl font-bold text-slate-900"
-          >
-            ClubSmart
-          </Link>
+          href="/"
+          className="text-sm font-semibold text-blue-700"
+        >
+          ← Volver a ClubSmart
+        </Link>
 
           <section className="mt-12 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-xl font-bold text-green-700">
@@ -112,9 +112,9 @@ export default async function RegisterPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/"
-          className="text-xl font-bold text-slate-900"
+          className="text-sm font-semibold text-blue-700"
         >
-          ClubSmart
+          ← Volver a ClubSmart
         </Link>
 
         <section className="mt-10 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
