@@ -136,6 +136,13 @@ export default function HomePage() {
             </Link>
 
             <Link
+  href="/registro"
+  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+>
+  Crear cuenta
+</Link>
+
+            <Link
   href="/login"
   className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
 >
@@ -174,12 +181,6 @@ export default function HomePage() {
                 {"Ver club de demostraci\u00f3n"}
               </Link>
 
-              <a
-                href="#contacto"
-                className="rounded-xl border border-blue-200 bg-white px-6 py-3 font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
-              >
-                Solicitar una prueba
-              </a>
             </div>
 
             <div className="mt-10 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
