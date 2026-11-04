@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -34,9 +35,14 @@ export default async function LoginPage() {
           </Link>
 
           <div className="mt-10">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-xl font-bold text-white">
-              C
-            </div>
+            <Image
+              src="/logorendersmartok.png"
+              alt="RenderSmart"
+              width={180}
+              height={60}
+              className="h-12 w-auto object-contain"
+              priority
+            />
 
             <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
               Ingresar al panel
